@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI IT Meeting Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-secondary: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(31, 41, 55, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-header {
+            background: var(--gradient-primary);
+            color: white;
+            text-align: center;
+            padding: 2rem 2rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            font-size: 0.95rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            margin-top: 1.5rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        .control-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-light);
+            position: relative;
+        }
+
+        .control-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            border-radius: 16px 16px 0 0;
+        }
+
+        .control-section h3 {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-section h3::before {
+            content: '⚙️';
+            font-size: 1rem;
+        }
+
+        /* Analysis Mode Selection */
+        .mode-selection {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .mode-selection h4 {
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .mode-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .mode-option {
+            position: relative;
+        }
+
+        .mode-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .mode-option label {
+            display: block;
+            padding: 0.75rem 1rem;
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .mode-option input[type="radio"]:checked + label {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+        }
+
+        .mode-option label:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .mode-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .mode-description {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .word-count-config {
+            background: #FFF9E6;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            padding: 1rem;
+            display: none;
+        }
+
+        .word-count-config.active {
+            display: block;
+        }
+
+        .word-count-config h5 {
+            color: var(--accent);
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .word-presets {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .preset-btn {
+            padding: 0.5rem;
+            border: 2px solid var(--border);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--accent);
+            background: #FFF9E6;
+        }
+
+        .preset-btn.active {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: white;
+        }
+
+        .custom-word-input {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 0.75rem;
+        }
+
+        .custom-word-input input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+        }
+
+        .button-grid {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .control-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .control-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .control-button:hover::before {
+            left: 100%;
+        }
+
+        .btn-start {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-stop {
+            background: var(--gradient-secondary);
+            color: white;
+            box-shadow: 0 8px 25px rgba(31, 41, 55, 0.3);
+        }
+
+        .btn-analyze {
+            background: var(--gradient-accent);
+            color: white;
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #6B7280, #4B5563);
+            color: white;
+            box-shadow: 0 8px 25px rgba(107, 114, 128, 0.3);
+        }
+
+        .control-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-button:active:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .control-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .session-stats {
+            display: none; /* Hidden for minimal design */
+        }
+
+        .metrics-section {
+            display: none; /* Hidden for minimal design */
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metrics-section {
+            margin: 3rem 0;
+        }
+
+        .metrics-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .metrics-header h2 {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .metrics-header p {
+            color: var(--text-secondary);
+            font-size: 1.125rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-light);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-primary);
+        }
+
+        .metric-card:nth-child(2)::before { background: var(--gradient-accent); }
+        .metric-card:nth-child(3)::before { background: var(--gradient-secondary); }
+        .metric-card:nth-child(4)::before { background: linear-gradient(135deg, var(--success), #059669); }
+        .metric-card:nth-child(5)::before { background: linear-gradient(135deg, #8B5CF6, #7C3AED); }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .metric-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: var(--text-primary);
+            margin: 0.5rem 0;
+            line-height: 1;
+        }
+
+        .metric-label {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-description {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .recording-status {
+            background: var(--gradient-primary);
+            color: white;
+            text-align: center;
+            padding: 1.5rem 2rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 1.25rem;
+            animation: recordingPulse 2s infinite;
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4);
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .recording-status::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes recordingPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.02); }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .tab-container {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--shadow-xl);
+            overflow: hidden;
+            margin: 2rem 0;
+            border: 1px solid var(--border-light);
+            min-height: 600px;
+        }
+
+        .tab-header {
+            display: flex;
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--border-light);
+            padding: 0.5rem;
+            gap: 0.5rem;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 1rem 2rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 12px;
+            font-size: 1.05rem;
+        }
+
+        .tab-button:hover {
+            background: rgba(220, 38, 38, 0.1);
+            color: var(--primary);
+        }
+
+        .tab-button.active {
+            color: white;
+            background: var(--gradient-primary);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .tab-content {
+            padding: 2rem;
+            min-height: 500px;
+            display: none;
+            background: var(--card-bg);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tab-content h3 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Analysis Loading State */
+        .analysis-loading {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, #FFF9E6, #FFF3CD);
+            border-radius: 20px;
+            border: 3px dashed var(--accent);
+            margin: 2rem 0;
+        }
+
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 2rem;
+            border: 6px solid var(--border-light);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        .loading-subtext {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .loading-timer {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .analysis-complete {
+            background: #D1FAE5;
+            color: #065F46;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border-left: 4px solid var(--success);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .analysis-complete-time {
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .content-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-light);
+        }
+
+        .content-card h3 {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+            border-left: 4px solid var(--warning);
+        }
+
+        .badge-success {
+            background: #D1FAE5;
+            color: #065F46;
+            border-left: 4px solid var(--success);
+        }
+
+        .badge-info {
+            background: #DBEAFE;
+            color: #1E40AF;
+            border-left: 4px solid var(--primary);
+        }
+
+        .transcript-container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+        }
+
+        .transcript-meta {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #D1FAE5;
+            color: #065F46;
+            border-left: 4px solid var(--success);
+        }
+
+        .message.error {
+            background: #FEE2E2;
+            color: #991B1B;
+            border-left: 4px solid var(--danger);
+        }
+
+        .message.info {
+            background: #DBEAFE;
+            color: #1E40AF;
+            border-left: 4px solid var(--primary);
+        }
+
+        .app-footer {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-top: 4rem;
+            padding: 3rem;
+            border-top: 1px solid var(--border);
+            background: var(--card-bg);
+            border-radius: 20px;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            text-align: left;
+            margin-bottom: 2rem;
+        }
+
+        .footer-section h4 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .analysis-ready-notification {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: white;
+            padding: 1.5rem 2rem;
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+            z-index: 1000;
+            animation: slideInUp 0.5s ease;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .analysis-ready-notification:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 35px rgba(16, 185, 129, 0.5);
+        }
+
+        @keyframes slideInUp {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+            .container { padding: 1rem; }
+            .app-header { padding: 2rem 1rem; }
+            .app-header h1 { font-size: 2rem; }
+            .button-grid { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .tab-header { flex-wrap: wrap; }
+            .tab-button { flex: none; min-width: 120px; }
+            .mode-options { grid-template-columns: 1fr; }
+            .word-presets { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="app-header">
+            <h1>🎙️ AI Meeting Analyzer</h1>
+            <p class="subtitle">Real-time transcription and intelligent analysis powered by Faster-Whisper & Grok AI</p>
+            <div class="status-indicator" style="background-color: {{ status_color }}20; color: {{ status_color }};">
+                <div style="width: 8px; height: 8px; background: {{ status_color }}; border-radius: 50%;"></div>
+                {{ status_text }}
+            </div>
+            {% if session_id %}
+            <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.9; font-weight: 500;">
+                Session ID: {{ session_id }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Analysis Mode Configuration (Only show when not recording) -->
+        {% if not is_recording %}
+        <div class="control-section">
+            <h3>⚙️ Analysis Configuration</h3>
+            <div class="mode-selection">
+                <h4>📊 Select Analysis Mode</h4>
+                <div class="mode-options">
+                    <div class="mode-option">
+                        <input type="radio" id="mode-automatic" name="analysis-mode" value="automatic" checked>
+                        <label for="mode-automatic">
+                            <div class="mode-title">🤖 Automatic Mode</div>
+                            <div class="mode-description">Auto-generates analysis after specified word count</div>
+                        </label>
+                    </div>
+                    <div class="mode-option">
+                        <input type="radio" id="mode-manual" name="analysis-mode" value="manual">
+                        <label for="mode-manual">
+                            <div class="mode-title">👆 Manual Mode</div>
+                            <div class="mode-description">On-demand analysis with "Analyze Now" button</div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Word Count Configuration (shown only for automatic mode) -->
+                <div class="word-count-config active" id="word-count-config">
+                    <h5>📝 Word Count Threshold</h5>
+                    <div class="word-presets">
+                        <button class="preset-btn active" data-words="200">200 words<br><small>Very Frequent</small></button>
+                        <button class="preset-btn" data-words="300">300 words<br><small>Frequent</small></button>
+                        <button class="preset-btn" data-words="500">500 words<br><small>Moderate</small></button>
+                        <button class="preset-btn" data-words="1000">1000 words<br><small>Sparse</small></button>
+                    </div>
+                    <div class="custom-word-input">
+                        <label style="font-weight: 600; color: var(--text-primary);">Or Custom:</label>
+                        <input type="number" id="custom-words" min="50" max="5000" step="50" placeholder="Enter word count">
+                        <button class="preset-btn" onclick="setCustomWords()">Apply</button>
+                    </div>
+                    <div id="selected-threshold" style="margin-top: 1rem; padding: 1rem; background: white; border-radius: 8px; text-align: center; font-weight: 700; color: var(--accent);">
+                        ✓ Analysis will trigger every <span id="threshold-value">200</span> words
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Controls -->
+        <div class="control-section">
+            <h3>Recording Controls</h3>
+            <div class="button-grid">
+                <button class="control-button btn-start" onclick="startRecording()" {% if is_recording %}disabled{% endif %}>
+                    🔴 Start Recording
+                </button>
+                <button class="control-button btn-stop" onclick="stopRecording()" {% if not is_recording %}disabled{% endif %}>
+                    ⏹️ Stop Recording
+                </button>
+                {% if is_recording %}
+                <button class="control-button btn-analyze" onclick="triggerManualAnalysis()" id="analyze-btn" {% if is_analyzing %}disabled{% endif %}>
+                    {% if is_analyzing %}
+                    <span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span>
+                    Analyzing...
+                    {% else %}
+                    🎯 Analyze Now
+                    {% endif %}
+                </button>
+                {% endif %}
+                <button class="control-button btn-clear" onclick="clearData()" {% if is_recording %}disabled{% endif %}>
+                    🗑️ Clear All
+                </button>
+            </div>
+
+            <!-- Session Statistics -->
+            <div class="session-stats">
+                <div class="stat-card">
+                    <div class="stat-value" style="color: var(--primary);">{{ total_sessions }}</div>
+                    <div class="stat-label">Total Sessions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: var(--success);">{{ total_meetings_analyzed }}</div>
+                    <div class="stat-label">Meetings Analyzed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+
+        <!-- Recording Status -->
+        {% if is_recording %}
+        <div class="recording-status" style="margin: 1.5rem 0;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+                <div style="width: 12px; height: 12px; background: #fff; border-radius: 50%; animation: recordingBlink 1s infinite;"></div>
+                <span>🔴 LIVE RECORDING - {{ '%02d:%02d' | format(duration // 60, duration % 60) }}</span>
+            </div>
+        </div>
+        <style>
+            @keyframes recordingBlink {
+                0%, 50% { opacity: 1; }
+                51%, 100% { opacity: 0.3; }
+            }
+        </style>
+        {% endif %}
+
+        <!-- Tabbed Interface -->
+        <div class="tab-container">
+            <div class="tab-header">
+                <button class="tab-button active" onclick="showTab('transcript')">🎙️ Live Transcript</button>
+                <button class="tab-button" onclick="showTab('analysis')" id="analysis-tab-btn">🤖 AI Analysis</button>
+            </div>
+
+            <!-- Live Transcript Tab -->
+            <div id="transcript" class="tab-content active">
+                <h3>🎙️ Live Transcript</h3>
+                {% if full_text %}
+                <div class="transcript-container" style="max-height: 600px;">
+                    <div class="transcript-meta">
+                        📊 {{ word_count }} words • {{ segments_count }} segments • {{ '%d:%02d' | format(duration // 60, duration % 60) }} duration
+                    </div>
+                    <div style="font-size: 1.05rem; line-height: 1.8;">{{ full_text }}</div>
+                </div>
+                {% else %}
+                <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">🎙️</div>
+                    <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Ready to Record</h3>
+                    <p style="color: var(--text-secondary); font-size: 1rem; max-width: 600px; margin: 0 auto;">
+                        Click "Start Recording" above to begin capturing your meeting. 
+                        The AI will transcribe in real-time and provide intelligent IT analysis.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- AI Analysis Tab -->
+            <div id="analysis" class="tab-content">
+                <h3>🤖 AI Analysis</h3>
+                
+                <!-- Loading State -->
+                <div id="analysis-loading" class="analysis-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">🧠 Generating AI Analysis...</div>
+                    <div class="loading-subtext">Analyzing your IT discussion with Grok AI</div>
+                    <div class="loading-timer" id="analysis-timer">0s</div>
+                </div>
+
+                <!-- Analysis Content -->
+                <div id="analysis-content">
+                    {% if analysis %}
+                    {% if final_summary %}
+                    <div class="message success" style="margin-bottom: 1.5rem;">✅ Final Analysis Complete - Meeting session ended</div>
+                    {% endif %}
+
+                    <!-- Analysis Complete Message -->
+                    <div class="analysis-complete" id="analysis-complete-msg" style="display: none;">
+                        <span style="font-size: 1.5rem;">✅</span>
+                        <div style="flex: 1;">
+                            <div><strong>Analysis Complete!</strong></div>
+                            <div class="analysis-complete-time">Generated in <span id="analysis-time">0</span> seconds</div>
+                        </div>
+                    </div>
+
+                    <!-- Technical Overview -->
+                    <div class="content-card" style="background: var(--primary-light); border-left: 4px solid var(--primary);">
+                        <h4 style="color: var(--primary); margin-bottom: 0.75rem;">📊 Technical Overview</h4>
+                        <p style="font-size: 1rem; line-height: 1.7;">{{ analysis.get('technical_analysis', 'No analysis available yet.') }}</p>
+                    </div>
+
+                    <!-- Issues and Recommendations -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
+                        <div>
+                            <h4 style="margin-bottom: 1rem; color: var(--warning);">⚠️ Potential Issues</h4>
+                            {% for issue in analysis.get('potential_issues', []) %}
+                            <div class="badge badge-warning" style="margin-bottom: 0.5rem;">⚠️ Issue {{ loop.index }}</div>
+                            <p style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6;">{{ issue }}</p>
+                            {% endfor %}
+                            {% if not analysis.get('potential_issues') %}
+                            <div class="message success">✓ No critical issues detected</div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h4 style="margin-bottom: 1rem; color: var(--success);">✅ Recommendations</h4>
+                            {% for rec in analysis.get('recommendations', []) %}
+                            <div class="badge badge-success" style="margin-bottom: 0.5rem;">✅ Recommendation {{ loop.index }}</div>
+                            <p style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6;">{{ rec }}</p>
+                            {% endfor %}
+                            {% if not analysis.get('recommendations') %}
+                            <div class="message info">No recommendations yet</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Questions and Actions -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div>
+                            <h4 style="margin-bottom: 1rem;">❓ Clarifying Questions</h4>
+                            {% for question in analysis.get('clarifying_questions', []) %}
+                            <div class="badge badge-info" style="margin-bottom: 0.5rem;">❓ Q{{ loop.index }}</div>
+                            <p style="margin: 0.5rem 0 1rem 0; font-size: 0.9rem;">{{ question }}</p>
+                            {% endfor %}
+                            {% if not analysis.get('clarifying_questions') %}
+                            <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; font-size: 0.9rem; color: var(--text-secondary);">
+                                No clarifying questions
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h4 style="margin-bottom: 1rem;">📋 Action Items</h4>
+                            {% for action in analysis.get('action_items', []) %}
+                            <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--primary-light); border-radius: 8px; border-left: 3px solid var(--primary);">
+                                <strong>{{ loop.index }}.</strong> {{ action }}
+                            </div>
+                            {% endfor %}
+                            {% if not analysis.get('action_items') %}
+                            <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; font-size: 0.9rem; color: var(--text-secondary);">
+                                No action items yet
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🤖</div>
+                        <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">AI Analysis Ready</h3>
+                        <p style="color: var(--text-secondary); font-size: 1rem; max-width: 600px; margin: 0 auto;">
+                            Start recording to see real-time AI analysis powered by Grok AI.
+                            The system will identify technical issues, provide recommendations, and generate actionable insights.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="app-footer" style="margin-top: 3rem; padding: 2rem; text-align: center;">
+            <p style="margin: 0.5rem 0;"><strong>AI IT Meeting Analyzer</strong> - Real-time transcription & intelligent analysis</p>
+            <p style="font-size: 0.85rem; opacity: 0.7; margin: 0.5rem 0;">
+                Powered by Faster-Whisper & Grok AI • Local transcription • Cloud analysis
+            </p>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Global state
+        let isRecording = {{ 'true' if is_recording else 'false' }};
+        let autoRefreshInterval;
+        let selectedWordsThreshold = 200;
+        let selectedMode = 'automatic';
+        let isAnalyzing = false;
+        let analysisStartTime = null;
+        let analysisPollInterval = null;
+        let currentTab = 'transcript'; // Track current tab
+
+        // Save current tab to localStorage
+        function saveCurrentTab(tabName) {
+            currentTab = tabName;
+            localStorage.setItem('currentTab', tabName);
+        }
+
+        // Restore current tab from localStorage
+        function restoreCurrentTab() {
+            const savedTab = localStorage.getItem('currentTab') || 'transcript';
+            currentTab = savedTab;
+            
+            // Apply the saved tab
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            const tabElement = document.getElementById(savedTab);
+            const tabButton = document.querySelector(`[onclick*="${savedTab}"]`);
+            
+            if (tabElement) tabElement.classList.add('active');
+            if (tabButton) tabButton.classList.add('active');
+            
+            // Handle analysis loading state if on analysis tab
+            if (savedTab === 'analysis' && isAnalyzing) {
+                document.getElementById('analysis-loading').style.display = 'block';
+                document.getElementById('analysis-content').style.display = 'none';
+            }
+        }
+
+        // Mode selection handling
+        document.addEventListener('DOMContentLoaded', function() {
+            // Restore current tab on page load
+            restoreCurrentTab();
+            
+            const modeRadios = document.querySelectorAll('input[name="analysis-mode"]');
+            const wordCountConfig = document.getElementById('word-count-config');
+            
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    selectedMode = this.value;
+                    if (this.value === 'automatic') {
+                        wordCountConfig.classList.add('active');
+                    } else {
+                        wordCountConfig.classList.remove('active');
+                    }
+                });
+            });
+
+            // Word count preset buttons
+            const presetBtns = document.querySelectorAll('.preset-btn[data-words]');
+            presetBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    presetBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    selectedWordsThreshold = parseInt(this.dataset.words);
+                    document.getElementById('threshold-value').textContent = selectedWordsThreshold;
+                    document.getElementById('custom-words').value = '';
+                });
+            });
+
+            // Initialize auto-refresh if recording
+            if (isRecording) {
+                startAutoRefresh();
+            }
+        });
+
+        function setCustomWords() {
+            const customInput = document.getElementById('custom-words');
+            const value = parseInt(customInput.value);
+            
+            if (value && value >= 50 && value <= 5000) {
+                selectedWordsThreshold = value;
+                document.getElementById('threshold-value').textContent = value;
+                document.querySelectorAll('.preset-btn[data-words]').forEach(btn => btn.classList.remove('active'));
+                showMessage(`Custom threshold set to ${value} words`, 'success');
+            } else {
+                showMessage('Please enter a value between 50 and 5000', 'error');
+            }
+        }
+
+        function showMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = message;
+            messagesDiv.appendChild(messageDiv);
+
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+
+        function showTab(tabName) {
+            // Save current tab
+            saveCurrentTab(tabName);
+            
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            // If switching to analysis tab, make sure loading/content states are correct
+            if (tabName === 'analysis') {
+                if (isAnalyzing) {
+                    document.getElementById('analysis-loading').style.display = 'block';
+                    document.getElementById('analysis-content').style.display = 'none';
+                } else {
+                    document.getElementById('analysis-loading').style.display = 'none';
+                    document.getElementById('analysis-content').style.display = 'block';
+                }
+            }
+        }
+
+        async function startRecording() {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Starting...';
+            button.disabled = true;
+
+            try {
+                // Send mode and threshold to backend
+                const response = await fetch('/start_recording', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mode: selectedMode,
+                        words_threshold: selectedWordsThreshold
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    isRecording = true;
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showMessage(result.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Start recording error:', error);
+                showMessage('Error starting recording: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function stopRecording() {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Stopping...';
+            button.disabled = true;
+
+            // Start analysis state (but don't switch tabs)
+            startAnalysisLoading();
+
+            try {
+                const response = await fetch('/stop_recording', { method: 'POST' });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage('Recording stopped. Generating final analysis...', 'info');
+                    // Poll for analysis completion, then reload
+                    pollForStopCompletion();
+                } else {
+                    showMessage(result.message, 'error');
+                    stopAnalysisLoading();
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Stop recording error:', error);
+                showMessage('Error stopping recording: ' + error.message, 'error');
+                stopAnalysisLoading();
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        function pollForStopCompletion() {
+            // Similar to pollForAnalysisCompletion but reloads page when done
+            let pollCount = 0;
+            const maxPolls = 120;
+            
+            const stopPollInterval = setInterval(async () => {
+                pollCount++;
+                
+                if (pollCount > maxPolls) {
+                    clearInterval(stopPollInterval);
+                    showMessage('Final analysis complete. Please refresh the page.', 'info');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+                    
+                    // Check if final analysis is complete
+                    if (!data.is_analyzing && !data.is_recording && data.final_summary) {
+                        clearInterval(stopPollInterval);
+                        const generationTime = (Date.now() - analysisStartTime) / 1000;
+                        showMessage(`✅ Final analysis complete in ${generationTime.toFixed(1)}s!`, 'success');
+                        // Reload to show final results
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 1000);
+        }
+
+        async function triggerManualAnalysis() {
+            const button = document.getElementById('analyze-btn');
+            if (!button || button.disabled) return;
+
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Analyzing...';
+            button.disabled = true;
+
+            // Start analysis state
+            startAnalysisLoading();
+
+            try {
+                const response = await fetch('/trigger_analysis', { method: 'POST' });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage('Analysis triggered! Generating insights...', 'info');
+                    // Poll for completion
+                    pollForAnalysisCompletion(() => {
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    });
+                } else {
+                    showMessage(result.message, 'error');
+                    stopAnalysisLoading();
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Trigger analysis error:', error);
+                showMessage('Error triggering analysis: ' + error.message, 'error');
+                stopAnalysisLoading();
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        function startAnalysisLoading() {
+            isAnalyzing = true;
+            analysisStartTime = Date.now();
+            
+            // DON'T switch tabs - let user stay where they are
+            // Only show loading state in the analysis tab itself
+            document.getElementById('analysis-loading').style.display = 'block';
+            document.getElementById('analysis-content').style.display = 'none';
+            
+            // Start timer
+            updateAnalysisTimer();
+        }
+
+        function stopAnalysisLoading(generationTime = null) {
+            isAnalyzing = false;
+            
+            // Hide loading state
+            document.getElementById('analysis-loading').style.display = 'none';
+            document.getElementById('analysis-content').style.display = 'block';
+            
+            // Show completion message with time
+            if (generationTime !== null) {
+                const completeMsg = document.getElementById('analysis-complete-msg');
+                const timeSpan = document.getElementById('analysis-time');
+                timeSpan.textContent = generationTime.toFixed(1);
+                completeMsg.style.display = 'flex';
+                
+                // Hide after 10 seconds
+                setTimeout(() => {
+                    completeMsg.style.display = 'none';
+                }, 10000);
+            }
+            
+            // Clear poll interval
+            if (analysisPollInterval) {
+                clearInterval(analysisPollInterval);
+                analysisPollInterval = null;
+            }
+        }
+
+        function updateAnalysisTimer() {
+            if (!isAnalyzing) return;
+            
+            const elapsed = (Date.now() - analysisStartTime) / 1000;
+            document.getElementById('analysis-timer').textContent = elapsed.toFixed(1) + 's';
+            
+            setTimeout(updateAnalysisTimer, 100);
+        }
+
+        function pollForAnalysisCompletion(callback = null) {
+            let pollCount = 0;
+            const maxPolls = 120; // Poll for up to 2 minutes (increased from 60)
+            
+            analysisPollInterval = setInterval(async () => {
+                pollCount++;
+                
+                if (pollCount > maxPolls) {
+                    clearInterval(analysisPollInterval);
+                    stopAnalysisLoading();
+                    showMessage('Analysis is taking longer than expected. Please refresh the page.', 'warning');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+                    
+                    // Check if analysis is complete (is_analyzing flag is false and we have analysis)
+                    if (!data.is_analyzing && data.analysis) {
+                        const generationTime = (Date.now() - analysisStartTime) / 1000;
+                        clearInterval(analysisPollInterval);
+                        stopAnalysisLoading(generationTime);
+                        
+                        if (callback) callback();
+                        
+                        // Update the analysis content without full reload
+                        updateAnalysisContent(data.analysis);
+                        showMessage(`✅ Analysis complete in ${generationTime.toFixed(1)}s!`, 'success');
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 1000); // Poll every second
+        }
+
+        function updateAnalysisContent(analysis) {
+            // Update analysis content dynamically without page reload
+            const analysisContent = document.getElementById('analysis-content');
+            if (!analysisContent) return;
+            
+            // Show notification that analysis is ready
+            showAnalysisReadyNotification();
+            
+            console.log('Analysis updated:', analysis);
+        }
+
+        function showAnalysisReadyNotification() {
+            // Create notification
+            const notification = document.createElement('div');
+            notification.className = 'analysis-ready-notification';
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <span style="font-size: 2rem;">✅</span>
+                    <div>
+                        <div style="font-weight: 700; font-size: 1.1rem;">Analysis Complete!</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">Click here to view results</div>
+                    </div>
+                </div>
+            `;
+            
+            notification.onclick = function() {
+                // Switch to analysis tab
+                document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('analysis').classList.add('active');
+                document.getElementById('analysis-tab-btn').classList.add('active');
+                
+                // Remove notification
+                notification.remove();
+                
+                // Reload to show latest analysis
+                setTimeout(() => location.reload(), 500);
+            };
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideInUp 0.5s ease reverse';
+                    setTimeout(() => notification.remove(), 500);
+                }
+            }, 10000);
+        }
+
+        async function clearData() {
+            if (!confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
+                return;
+            }
+
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Clearing...';
+            button.disabled = true;
+
+            try {
+                const response = await fetch('/clear_data', { method: 'POST' });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showMessage(result.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Clear data error:', error);
+                showMessage('Error clearing data: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        function startAutoRefresh() {
+            if (isRecording) {
+                autoRefreshInterval = setInterval(() => {
+                    // Always refresh during recording to update transcript
+                    // But check if we should reload based on current state
+                    if (!isAnalyzing) {
+                        // Normal refresh when not analyzing
+                        location.reload();
+                    } else {
+                        // During analysis, only update transcript data without full reload
+                        // This keeps the loading state visible while allowing transcript updates
+                        updateTranscriptOnly();
+                    }
+                }, 5000);
+            }
+        }
+
+        async function updateTranscriptOnly() {
+            // Fetch only transcript data without reloading the page
+            try {
+                const response = await fetch('/api/transcript');
+                const data = await response.json();
+                
+                // Update transcript display if on transcript tab
+                const transcriptContainer = document.querySelector('.transcript-container div:last-child');
+                if (transcriptContainer && data.full_text) {
+                    transcriptContainer.textContent = data.full_text;
+                }
+                
+                // Update word count
+                const transcriptMeta = document.querySelector('.transcript-meta');
+                if (transcriptMeta) {
+                    const duration = Math.floor((Date.now() - {{ 'new Date("' + start_time.isoformat() + '")' if start_time else 'Date.now()' }}) / 1000);
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = duration % 60;
+                    transcriptMeta.innerHTML = `📊 ${data.full_text.split(' ').length} words • ${data.segment_count} segments • ${minutes}:${seconds.toString().padStart(2, '0')} duration`;
+                }
+            } catch (error) {
+                console.error('Error updating transcript:', error);
+            }
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
+
+        // Add CSS for loading animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+
+</html>

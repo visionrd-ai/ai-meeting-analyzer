@@ -1,4 +1,3 @@
-
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -35,7 +34,11 @@ app_state = {
     'start_time': None,
     'recording_session_id': None,
     'total_sessions': 0,
-    'total_meetings_analyzed': 0
+    'total_meetings_analyzed': 0,
+    'analysis_mode': 'automatic',  # 'automatic' or 'manual'
+    'words_threshold': 200,  # Default word count for automatic mode
+    'is_analyzing': False,  # Track if analysis is in progress
+    'analysis_start_time': None,  # Track when analysis started
 }
 
 # ================================================================
@@ -133,22 +136,30 @@ def on_new_transcript(text: str):
         save_transcripts(segments)
         print(f"New transcript segment: {text[:50]}...")
         
-        # Trigger live analysis update
-        if app_state['is_recording'] and app_state['summarizer']:
+        # Trigger live analysis update (only for automatic mode)
+        if app_state['is_recording'] and app_state['summarizer'] and app_state['analysis_mode'] == 'automatic':
             try:
-                analysis = app_state['summarizer'].add_transcript(text)
+                # Add transcript - will auto-analyze if threshold reached
+                analysis = app_state['summarizer'].add_transcript(text, auto_analyze=True)
                 if analysis:
                     app_state['current_analysis'] = analysis
-                    print("Live analysis updated")
+                    print("✓ Automatic analysis updated")
             except Exception as e:
                 print(f"Error updating live analysis: {e}")
+        elif app_state['is_recording'] and app_state['summarizer']:
+            # Manual mode - just add transcript without analyzing
+            try:
+                app_state['summarizer'].add_transcript(text, auto_analyze=False)
+                print("✓ Transcript added (manual mode - no auto-analysis)")
+            except Exception as e:
+                print(f"Error adding transcript: {e}")
                 
     except Exception as e:
         print(f"Error in transcript callback: {e}")
         import traceback
         traceback.print_exc()
 
-def start_recording():
+def start_recording(mode='automatic', words_threshold=200):
     """Start the recording session with audio processing and AI analysis."""
     xai_key = os.getenv("XAI_API_KEY")
     if not xai_key:
@@ -161,9 +172,20 @@ def start_recording():
         # Clear previous session data
         clear_storage()
         
-        # Initialize AI components
-        print("Initializing AI components...")
-        app_state['summarizer'] = MeetingSummarizer(xai_key)
+        app_state['analysis_mode'] = mode
+        app_state['words_threshold'] = words_threshold
+        
+        # Initialize AI components with appropriate settings
+        print(f"Initializing AI components in {mode} mode...")
+        
+        if mode == 'automatic':
+            # Automatic mode: set word threshold
+            app_state['summarizer'] = MeetingSummarizer(xai_key, words_per_analysis=words_threshold)
+            print(f"✓ Automatic mode: analysis every {words_threshold} words")
+        else:
+            # Manual mode: disable automatic analysis
+            app_state['summarizer'] = MeetingSummarizer(xai_key, words_per_analysis=0)
+            print(f"✓ Manual mode: on-demand analysis only")
         
         print("Initializing audio processor...")
         app_state['audio_processor'] = AudioProcessor(on_new_transcript)
@@ -171,12 +193,15 @@ def start_recording():
         # Set session metadata
         app_state['start_time'] = datetime.now()
         app_state['recording_session_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
+        app_state['is_analyzing'] = False
         
         # Save session metadata
         metadata = {
             'start_time': app_state['start_time'],
             'session_id': app_state['recording_session_id'],
-            'xai_model': 'grok-4-fast-reasoning'
+            'xai_model': 'grok-4-fast-reasoning',
+            'analysis_mode': mode,
+            'words_threshold': words_threshold
         }
         save_metadata(metadata)
         
@@ -188,7 +213,7 @@ def start_recording():
         if not app_state['audio_processor'].is_recording:
             return {
                 "success": False,
-                "message": "❌ Failed to start audio recording. Please check your microphone permissions and ensure no other app is using the microphone."
+                "message": "❌ Failed to start audio recording. Please check your microphone permissions."
             }
         
         app_state['is_recording'] = True
@@ -197,10 +222,11 @@ def start_recording():
         app_state['total_sessions'] += 1
         save_app_stats()
         
-        print("Recording started successfully!")
+        mode_desc = f"every {words_threshold} words" if mode == 'automatic' else "on-demand"
+        print("✓ Recording started successfully!")
         return {
             "success": True, 
-            "message": "🎙️ Recording started successfully! Speak clearly into your microphone to begin transcription."
+            "message": f"🎙️ Recording started in {mode.upper()} mode ({mode_desc})!"
         }
         
     except Exception as e:
@@ -209,7 +235,7 @@ def start_recording():
         traceback.print_exc()
         return {
             "success": False, 
-            "message": f"❌ Error starting recording: {str(e)}. Please check the console for more details."
+            "message": f"❌ Error starting recording: {str(e)}"
         }
 
 def stop_recording():
@@ -219,6 +245,10 @@ def stop_recording():
         if app_state['audio_processor']:
             app_state['audio_processor'].stop_recording()
         
+        # Mark as analyzing
+        app_state['is_analyzing'] = True
+        app_state['analysis_start_time'] = datetime.now()
+        
         # Allow time for final processing
         time.sleep(2)
         
@@ -227,54 +257,112 @@ def stop_recording():
         
         if len(segments) == 0:
             app_state['is_recording'] = False
+            app_state['is_analyzing'] = False
             return {
                 "success": False, 
-                "message": "⚠️ No transcripts found! Please ensure your microphone is working and you spoke during the recording."
+                "message": "⚠️ No transcripts found! Please ensure you spoke during the recording."
             }
         
-        # Generate final analysis
-        xai_key = os.getenv("XAI_API_KEY")
-        if xai_key:
-            fresh_summarizer = MeetingSummarizer(xai_key)
-            for segment in segments:
-                fresh_summarizer.add_transcript(segment)
-            app_state['final_summary'] = fresh_summarizer.get_final_summary()
+        # Generate final analysis in background thread
+        def generate_final_analysis():
+            try:
+                xai_key = os.getenv("XAI_API_KEY")
+                if xai_key:
+                    fresh_summarizer = MeetingSummarizer(xai_key)
+                    for segment in segments:
+                        fresh_summarizer.add_transcript(segment, auto_analyze=False)
+                    app_state['final_summary'] = fresh_summarizer.get_final_summary()
+                    print("✓ Final summary generated")
+                else:
+                    print("⚠️ No API key for final summary")
+            except Exception as e:
+                print(f"Error generating final summary: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                app_state['is_analyzing'] = False
+                app_state['is_recording'] = False
+                app_state['total_meetings_analyzed'] += 1
+                save_app_stats()
         
-        # Update session state
-        app_state['is_recording'] = False
-        app_state['total_meetings_analyzed'] += 1
-        save_app_stats()
+        # Start analysis in background
+        thread = threading.Thread(target=generate_final_analysis, daemon=True)
+        thread.start()
         
         return {
             "success": True, 
-            "message": "✅ Recording completed successfully! Final IT analysis has been generated."
+            "message": "✅ Recording stopped. Generating final analysis..."
         }
         
     except Exception as e:
         app_state['is_recording'] = False
+        app_state['is_analyzing'] = False
         return {
             "success": False, 
             "message": f"❌ Error stopping recording: {str(e)}"
         }
 
-def update_live_analysis():
-    """Update live analysis during recording."""
+def trigger_manual_analysis():
+    """Trigger on-demand analysis (for manual mode)."""
     if not app_state['is_recording'] or not app_state['summarizer']:
-        return
+        return {
+            "success": False,
+            "message": "❌ No active recording session!"
+        }
     
-    try:
-        segments = load_transcripts()
-        current_transcript = app_state['summarizer'].full_transcript
-        
-        # Process new segments
-        if len(segments) > len(current_transcript):
-            for segment in segments[len(current_transcript):]:
-                analysis = app_state['summarizer'].add_transcript(segment)
-                if analysis:
-                    app_state['current_analysis'] = analysis
-                    
-    except Exception as e:
-        print(f"Error updating live analysis: {e}")
+    if app_state['is_analyzing']:
+        return {
+            "success": False,
+            "message": "⚠️ Analysis already in progress. Please wait..."
+        }
+    
+    segments = load_transcripts()
+    if len(segments) == 0:
+        return {
+            "success": False,
+            "message": "⚠️ No transcript available yet! Start speaking."
+        }
+    
+    # Check word count
+    word_count = app_state['summarizer'].word_count
+    if word_count < 10:
+        return {
+            "success": False,
+            "message": f"⚠️ Only {word_count} words transcribed. Speak more for better analysis."
+        }
+    
+    # Mark as analyzing
+    app_state['is_analyzing'] = True
+    app_state['analysis_start_time'] = datetime.now()
+    
+    # Perform analysis in background thread
+    def perform_analysis():
+        try:
+            print(f"🎯 Manual analysis triggered ({word_count} words)")
+            start_time = time.time()
+            
+            # Use force_analysis which is optimized for comprehensive analysis
+            analysis = app_state['summarizer'].force_analysis()
+            
+            elapsed = time.time() - start_time
+            print(f"✓ Manual analysis complete in {elapsed:.2f} seconds")
+            
+            if analysis:
+                app_state['current_analysis'] = analysis
+        except Exception as e:
+            print(f"Error in manual analysis: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            app_state['is_analyzing'] = False
+    
+    thread = threading.Thread(target=perform_analysis, daemon=True)
+    thread.start()
+    
+    return {
+        "success": True,
+        "message": f"🧠 Analyzing {word_count} words..."
+    }
 
 def calculate_metrics():
     """Calculate real-time metrics for the dashboard."""
@@ -291,10 +379,10 @@ def calculate_metrics():
     word_count = len(full_text.split()) if full_text else 0
     wpm = round(word_count / (duration / 60)) if duration > 0 else 0
     
-    # Calculate confidence (mock implementation - could be enhanced with actual confidence scores)
+    # Calculate confidence
     confidence = min(95, 75 + (word_count // 10)) if word_count > 0 else 0
     
-    # Calculate momentum (discussion flow)
+    # Calculate momentum
     momentum = min(100, word_count // 10) if word_count > 0 else 0
     
     # Calculate technical depth
@@ -328,10 +416,6 @@ def calculate_metrics():
 @app.route('/')
 def index():
     """Main application dashboard."""
-    # Update live analysis if recording
-    if app_state['is_recording']:
-        update_live_analysis()
-    
     # Calculate current metrics
     metrics = calculate_metrics()
     
@@ -339,7 +423,8 @@ def index():
     status_text = "READY TO RECORD"
     status_color = "#10B981"
     if app_state['is_recording']:
-        status_text = "RECORDING IN PROGRESS"
+        mode_text = f"({app_state['analysis_mode'].upper()} MODE)"
+        status_text = f"RECORDING IN PROGRESS {mode_text}"
         status_color = "#EF4444"
     
     # Prepare template data
@@ -352,21 +437,35 @@ def index():
         'session_id': app_state['recording_session_id'],
         'total_sessions': app_state['total_sessions'],
         'total_meetings_analyzed': app_state['total_meetings_analyzed'],
+        'analysis_mode': app_state['analysis_mode'],
+        'words_threshold': app_state['words_threshold'],
+        'is_analyzing': app_state['is_analyzing'],
         **metrics
     }
     
-    return render_template('index.html', **template_data)
+    return render_template('index_obaid.html', **template_data)
 
 @app.route('/start_recording', methods=['POST'])
 def start_recording_route():
     """API endpoint to start recording."""
-    result = start_recording()
+    # Get mode and threshold from request (if provided)
+    data = request.get_json() or {}
+    mode = data.get('mode', 'automatic')
+    words_threshold = data.get('words_threshold', 200)
+    
+    result = start_recording(mode=mode, words_threshold=words_threshold)
     return jsonify(result)
 
 @app.route('/stop_recording', methods=['POST'])
 def stop_recording_route():
     """API endpoint to stop recording."""
     result = stop_recording()
+    return jsonify(result)
+
+@app.route('/trigger_analysis', methods=['POST'])
+def trigger_analysis_route():
+    """API endpoint to trigger manual analysis."""
+    result = trigger_manual_analysis()
     return jsonify(result)
 
 @app.route('/clear_data', methods=['POST'])
@@ -376,6 +475,7 @@ def clear_data_route():
         clear_storage()
         app_state['final_summary'] = None
         app_state['current_analysis'] = None
+        app_state['is_analyzing'] = False
         return jsonify({
             "success": True, 
             "message": "🗑️ All data cleared successfully!"
@@ -392,11 +492,14 @@ def get_status():
     
     return jsonify({
         'is_recording': app_state['is_recording'],
+        'is_analyzing': app_state['is_analyzing'],
         'session_id': app_state['recording_session_id'],
         'analysis': app_state['final_summary'] or app_state['current_analysis'],
         'final_summary': bool(app_state['final_summary']),
         'total_sessions': app_state['total_sessions'],
         'total_meetings_analyzed': app_state['total_meetings_analyzed'],
+        'analysis_mode': app_state['analysis_mode'],
+        'words_threshold': app_state['words_threshold'],
         **metrics
     })
 
@@ -418,7 +521,9 @@ def export_summary():
             'session_id': app_state['recording_session_id'],
             'timestamp': datetime.now().isoformat(),
             'summary': app_state['final_summary'],
-            'transcript': " ".join(load_transcripts())
+            'transcript': " ".join(load_transcripts()),
+            'analysis_mode': app_state['analysis_mode'],
+            'words_threshold': app_state['words_threshold']
         })
     return jsonify({'error': 'No summary available'}), 404
 
@@ -460,7 +565,7 @@ def initialize_app():
     
     print(f"📊 Total sessions: {app_state['total_sessions']}")
     print(f"📈 Total meetings analyzed: {app_state['total_meetings_analyzed']}")
-    print("🎙️  AI IT Meeting Analyzer is ready!")
+    print("🎙️ AI IT Meeting Analyzer is ready!")
     print("🌐 Open http://localhost:5000 in your browser to start")
 
 # ================================================================

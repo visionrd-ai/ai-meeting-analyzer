@@ -233,3 +233,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+    #    <body data-is-recording="{{ 'true' if is_recording else 'false' }}">
+    # <script>
+    #     let isRecording = document.body.dataset.isRecording === 'true';
+    #     let autoRefreshInterval;
+    #     let selectedWordsThreshold = 200;
+    #     let selectedMode = 'automatic';
+    #     let isAnalyzing = false;
+    #     let analysisStartTime = null;
+    #     let analysisPollInterval = null;
+    # </script>
