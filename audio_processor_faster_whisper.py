@@ -31,11 +31,11 @@ CHANNELS = 1                   # Mono audio (sufficient for speech)
 RATE = 16000                   # 16kHz sample rate (Whisper optimal)
 
 # Transcription chunk settings
-CHUNK_DURATION_SECONDS = 3     # Process audio every 3 seconds (faster updates)
+CHUNK_DURATION_SECONDS = 2     # Process audio every 3 seconds (faster updates)
 OVERLAP_SECONDS = 1.5          # 1.5-second overlap (50% for better continuity)
 
 # Whisper model settings
-WHISPER_MODEL_SIZE = "base"    # Options: tiny, base, small, medium, large
+WHISPER_MODEL_SIZE = "tiny"    # Options: tiny, base, small, medium, large
                                # tiny = fastest, least accurate
                                # base = good balance (RECOMMENDED)
                                # small = more accurate, slower
