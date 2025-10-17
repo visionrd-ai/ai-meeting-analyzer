@@ -12,7 +12,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from dotenv import load_dotenv
 from audio_processor_faster_whisper import AudioProcessor
-from summarizer_2 import MeetingSummarizer
+from summarizer import MeetingSummarizer
 import threading
 
 # Load environment variables from .env file
