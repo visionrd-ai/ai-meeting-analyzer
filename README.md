@@ -54,7 +54,8 @@
 
 ```mermaid
 graph LR
-    A[🎙️ Live Transcript Page] ---|Navigate|--- B[🤖 AI Analysis Page]
+    A[🎙️ Live Transcript Page] --> B[🤖 AI Analysis Page]
+    B --> A
     A --> C[Real-time Recording]
     A --> D[Live Transcription]
     A --> E[Recording Controls]
@@ -104,64 +105,26 @@ graph LR
 </tr>
 </table>
 
-### 🎨 **User Interface**
+### 🎨 **User Interface Preview**
 
-<div align="center">
+#### 🎙️ **Live Transcript Page Features:**
+- 🎛️ **Recording Controls**: Start, Stop, Analyze, Clear buttons
+- ⚙️ **Analysis Configuration**: Choose Automatic or Manual mode
+- 📝 **Word Thresholds**: 200, 300, 500, 1000 or custom word counts
+- 📊 **Live Transcript**: Real-time speech-to-text display
+- 📈 **Session Stats**: Word count, segments, duration tracking
 
-**🎙️ Live Transcript Page**
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🎙️ AI Meeting Analyzer                                     │
-│  Real-time transcription powered by Faster-Whisper & Grok  │
-│  ┌─────────────────┐ ┌─────────────────┐                   │
-│  │ 🎙️ Live Transcript│ │ 🤖 AI Analysis  │                   │
-│  │     (Active)     │ │                 │                   │
-│  └─────────────────┘ └─────────────────┘                   │
-├─────────────────────────────────────────────────────────────┤
-│  ⚙️ Analysis Configuration                                  │
-│  📊 Mode: 🤖 Automatic | 👆 Manual                          │
-│  📝 Threshold: [200] [300] [500] [1000] words              │
-├─────────────────────────────────────────────────────────────┤
-│  🎛️ Controls: [🔴 Start] [⏹️ Stop] [🎯 Analyze] [🗑️ Clear]  │
-├─────────────────────────────────────────────────────────────┤
-│  📊 Live Transcript                                         │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │ 📊 245 words • 12 segments • 3:42 duration             │ │
-│  │                                                         │ │
-│  │ "Let's discuss the cloud migration strategy for our    │ │
-│  │  production environment. We need to consider security  │ │
-│  │  implications and cost optimization..."                │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+#### 🤖 **AI Analysis Page Features:**
+- 📊 **Technical Overview**: Comprehensive discussion summary
+- ⚠️ **Potential Issues**: Identified problems and risks
+- ✅ **Recommendations**: Best practices and solutions
+- ❓ **Clarifying Questions**: Important missing details
+- 📋 **Action Items**: Concrete next steps and tasks
 
-**🤖 AI Analysis Page**
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🤖 AI Analysis                                             │
-│  Intelligent meeting analysis powered by Grok AI           │
-│  ┌─────────────────┐ ┌─────────────────┐                   │
-│  │ 🎙️ Live Transcript│ │ 🤖 AI Analysis  │                   │
-│  │                 │ │    (Active)     │                   │
-│  └─────────────────┘ └─────────────────┘                   │
-├─────────────────────────────────────────────────────────────┤
-│  ✅ Analysis Complete! Latest analysis available            │
-├─────────────────────────────────────────────────────────────┤
-│  📊 Technical Overview                                      │
-│  Discussion covers cloud migration with focus on security  │
-│  and cost optimization. Key concerns around data privacy.  │
-├─────────────────────────────────────────────────────────────┤
-│  ⚠️ Potential Issues        │  ✅ Recommendations           │
-│  • Data encryption gaps     │  • Implement zero-trust      │
-│  • Cost monitoring missing  │  • Set up CloudWatch alerts  │
-├─────────────────────────────────────────────────────────────┤
-│  ❓ Questions               │  📋 Action Items              │
-│  • Which compliance reqs?   │  1. Review security policies │
-│  • Budget constraints?      │  2. Schedule architecture mtg │
-└─────────────────────────────────────────────────────────────┘
-```
-
-</div>
+#### � **Navligation Between Pages:**
+Both pages include navigation links in the header to easily switch between:
+- **�️ Live Tsranscript** - For recording and viewing transcripts
+- **🤖 AI Analysis** - For viewing AI-generated insights
 
 ---
 
@@ -298,14 +261,14 @@ flowchart TD
     A[🚀 Start Application] --> B[🌐 Open Browser]
     B --> C[⚙️ Configure Analysis Mode]
     C --> D{📊 Choose Mode}
-    D -->|🤖 Automatic| E[📝 Set Word Threshold]
-    D -->|👆 Manual| F[🎙️ Start Recording]
+    D --> E[📝 Set Word Threshold]
+    D --> F[🎙️ Start Recording]
     E --> F
     F --> G[🗣️ Speak into Microphone]
     G --> H[👀 Watch Live Transcript]
     H --> I{🤖 Analysis Mode?}
-    I -->|Automatic| J[⚡ Auto Analysis at Threshold]
-    I -->|Manual| K[🎯 Click 'Analyze Now']
+    I --> J[⚡ Auto Analysis at Threshold]
+    I --> K[🎯 Click Analyze Now]
     J --> L[🤖 View AI Analysis Page]
     K --> L
     L --> M[📊 Review Insights]
@@ -912,7 +875,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 **Made with ❤️ by the VisionRD Team**
 
-[![VisionRD](https://img.shields.io/badge/VisionRD-AI%20Solutions-red?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K)](https://visionrd.ai)
+[![VisionRD](https://img.shields.io/badge/VisionRD-AI%20Solutions-red?style=for-the-badge)](https://visionrd.ai)
 
 </div>
 
