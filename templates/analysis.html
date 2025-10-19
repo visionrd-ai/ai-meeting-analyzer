@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI IT Meeting Analyzer - AI Analysis</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-secondary: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(31, 41, 55, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-header {
+            background: var(--gradient-primary);
+            color: white;
+            text-align: center;
+            padding: 2rem 2rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            font-size: 0.95rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            margin-top: 1.5rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--primary);
+        }
+
+        /* Analysis Loading State */
+        .analysis-loading {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, #FFF9E6, #FFF3CD);
+            border-radius: 20px;
+            border: 3px dashed var(--accent);
+            margin: 2rem 0;
+        }
+
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 2rem;
+            border: 6px solid var(--border-light);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        .loading-subtext {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .loading-timer {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .analysis-complete {
+            background: #D1FAE5;
+            color: #065F46;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border-left: 4px solid var(--success);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .analysis-complete-time {
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .content-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-light);
+        }
+
+        .content-card h3 {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .content-card h4 {
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+            border-left: 4px solid var(--warning);
+        }
+
+        .badge-success {
+            background: #D1FAE5;
+            color: #065F46;
+            border-left: 4px solid var(--success);
+        }
+
+        .badge-info {
+            background: #DBEAFE;
+            color: #1E40AF;
+            border-left: 4px solid var(--primary);
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #D1FAE5;
+            color: #065F46;
+            border-left: 4px solid var(--success);
+        }
+
+        .message.error {
+            background: #FEE2E2;
+            color: #991B1B;
+            border-left: 4px solid var(--danger);
+        }
+
+        .message.info {
+            background: #DBEAFE;
+            color: #1E40AF;
+            border-left: 4px solid var(--primary);
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .analysis-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .analysis-section h4 {
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .analysis-item {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .analysis-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .analysis-item strong {
+            color: var(--text-primary);
+        }
+
+        .no-content {
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .refresh-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--gradient-accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            margin: 1rem 0;
+        }
+
+        .refresh-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+        }
+
+        .app-footer {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-top: 4rem;
+            padding: 3rem;
+            border-top: 1px solid var(--border);
+            background: var(--card-bg);
+            border-radius: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .app-header { padding: 2rem 1rem; }
+            .app-header h1 { font-size: 2rem; }
+            .analysis-grid { grid-template-columns: 1fr; }
+            .nav-links { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="app-header">
+            <h1>🤖 AI Analysis</h1>
+            <p class="subtitle">Intelligent meeting analysis powered by Grok AI</p>
+            <div class="status-indicator" style="background-color: {{ status_color }}20; color: {{ status_color }};">
+                <div style="width: 8px; height: 8px; background: {{ status_color }}; border-radius: 50%;"></div>
+                {{ status_text }}
+            </div>
+            {% if session_id %}
+            <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.9; font-weight: 500;">
+                Session ID: {{ session_id }}
+            </div>
+            {% endif %}
+            
+            <!-- Navigation Links -->
+            <div class="nav-links">
+                <a href="/" class="nav-link">
+                    🎙️ Live Transcript
+                </a>
+                <a href="/analysis" class="nav-link active">
+                    🤖 AI Analysis
+                </a>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+
+        <!-- Analysis Loading State -->
+        <div id="analysis-loading" class="analysis-loading" style="display: {% if is_analyzing %}block{% else %}none{% endif %};">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">🧠 Generating AI Analysis...</div>
+            <div class="loading-subtext">Analyzing your IT discussion with Grok AI</div>
+            <div class="loading-timer" id="analysis-timer">0s</div>
+        </div>
+
+        <!-- Analysis Content -->
+        <div id="analysis-content" style="display: {% if is_analyzing %}none{% else %}block{% endif %};">
+            {% if analysis %}
+            {% if final_summary %}
+            <div class="message success" style="margin-bottom: 1.5rem;">✅ Final Analysis Complete - Meeting session ended</div>
+            {% endif %}
+
+            <!-- Analysis Complete Message -->
+            <div class="analysis-complete" id="analysis-complete-msg">
+                <span style="font-size: 1.5rem;">✅</span>
+                <div style="flex: 1;">
+                    <div><strong>Analysis Complete!</strong></div>
+                    <div class="analysis-complete-time">Latest analysis available</div>
+                </div>
+            </div>
+
+            <!-- Technical Overview -->
+            <div class="content-card" style="background: var(--primary-light); border-left: 4px solid var(--primary);">
+                <h4 style="color: var(--primary); margin-bottom: 0.75rem;">📊 Technical Overview</h4>
+                <p style="font-size: 1rem; line-height: 1.7;">{{ analysis.get('technical_analysis', 'No analysis available yet.') }}</p>
+            </div>
+
+            <!-- Issues and Recommendations Grid -->
+            <div class="analysis-grid">
+                <div class="analysis-section">
+                    <h4 style="color: var(--warning);">⚠️ Potential Issues</h4>
+                    {% for issue in analysis.get('potential_issues', []) %}
+                    <div class="analysis-item">
+                        <div class="badge badge-warning" style="margin-bottom: 0.5rem;">⚠️ Issue {{ loop.index }}</div>
+                        <p style="margin: 0; font-size: 0.95rem; line-height: 1.6;">{{ issue }}</p>
+                    </div>
+                    {% endfor %}
+                    {% if not analysis.get('potential_issues') %}
+                    <div class="no-content">✓ No critical issues detected</div>
+                    {% endif %}
+                </div>
+
+                <div class="analysis-section">
+                    <h4 style="color: var(--success);">✅ Recommendations</h4>
+                    {% for rec in analysis.get('recommendations', []) %}
+                    <div class="analysis-item">
+                        <div class="badge badge-success" style="margin-bottom: 0.5rem;">✅ Recommendation {{ loop.index }}</div>
+                        <p style="margin: 0; font-size: 0.95rem; line-height: 1.6;">{{ rec }}</p>
+                    </div>
+                    {% endfor %}
+                    {% if not analysis.get('recommendations') %}
+                    <div class="no-content">No recommendations yet</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Questions and Actions Grid -->
+            <div class="analysis-grid">
+                <div class="analysis-section">
+                    <h4>❓ Clarifying Questions</h4>
+                    {% for question in analysis.get('clarifying_questions', []) %}
+                    <div class="analysis-item">
+                        <div class="badge badge-info" style="margin-bottom: 0.5rem;">❓ Q{{ loop.index }}</div>
+                        <p style="margin: 0; font-size: 0.9rem;">{{ question }}</p>
+                    </div>
+                    {% endfor %}
+                    {% if not analysis.get('clarifying_questions') %}
+                    <div class="no-content">No clarifying questions</div>
+                    {% endif %}
+                </div>
+
+                <div class="analysis-section">
+                    <h4>📋 Action Items</h4>
+                    {% for action in analysis.get('action_items', []) %}
+                    <div class="analysis-item">
+                        <strong>{{ loop.index }}.</strong> {{ action }}
+                    </div>
+                    {% endfor %}
+                    {% if not analysis.get('action_items') %}
+                    <div class="no-content">No action items yet</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Refresh Button -->
+            <div style="text-align: center; margin: 2rem 0;">
+                <button class="refresh-button" onclick="refreshAnalysis()">
+                    🔄 Refresh Analysis
+                </button>
+            </div>
+
+            {% else %}
+            <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
+                <div style="font-size: 4rem; margin-bottom: 1rem;">🤖</div>
+                <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">AI Analysis Ready</h3>
+                <p style="color: var(--text-secondary); font-size: 1rem; max-width: 600px; margin: 0 auto;">
+                    Start recording on the Live Transcript page to see real-time AI analysis powered by Grok AI.
+                    The system will identify technical issues, provide recommendations, and generate actionable insights.
+                </p>
+                <div style="margin-top: 2rem;">
+                    <a href="/" class="refresh-button">
+                        🎙️ Go to Live Transcript
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="app-footer" style="margin-top: 3rem; padding: 2rem; text-align: center;">
+            <p style="margin: 0.5rem 0;"><strong>AI IT Meeting Analyzer</strong> - Real-time transcription & intelligent analysis</p>
+            <p style="font-size: 0.85rem; opacity: 0.7; margin: 0.5rem 0;">
+                Powered by Faster-Whisper & Grok AI • Local transcription • Cloud analysis
+            </p>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Global state
+        let isAnalyzing = {{ 'true' if is_analyzing else 'false' }};
+        let analysisStartTime = null;
+        let analysisPollInterval = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start analysis monitoring if analyzing
+            if (isAnalyzing) {
+                startAnalysisMonitoring();
+            }
+        });
+
+        function showMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = message;
+            messagesDiv.appendChild(messageDiv);
+
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+
+        function startAnalysisMonitoring() {
+            analysisStartTime = Date.now();
+            updateAnalysisTimer();
+            
+            // Poll for analysis completion
+            analysisPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+                    
+                    if (!data.is_analyzing) {
+                        // Analysis complete
+                        stopAnalysisMonitoring();
+                        showMessage('✅ Analysis complete! Refreshing results...', 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+            }, 2000);
+        }
+
+        function stopAnalysisMonitoring() {
+            isAnalyzing = false;
+            if (analysisPollInterval) {
+                clearInterval(analysisPollInterval);
+                analysisPollInterval = null;
+            }
+        }
+
+        function updateAnalysisTimer() {
+            if (!isAnalyzing || !analysisStartTime) return;
+            
+            const elapsed = Math.floor((Date.now() - analysisStartTime) / 1000);
+            const timerElement = document.getElementById('analysis-timer');
+            if (timerElement) {
+                timerElement.textContent = `${elapsed}s`;
+            }
+            
+            if (isAnalyzing) {
+                setTimeout(updateAnalysisTimer, 1000);
+            }
+        }
+
+        async function refreshAnalysis() {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Refreshing...';
+            button.disabled = true;
+
+            try {
+                // Just reload the page to get latest analysis
+                location.reload();
+            } catch (error) {
+                console.error('Refresh error:', error);
+                showMessage('Error refreshing analysis: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Auto-refresh every 10 seconds if recording is active
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                // If recording is active and we're not currently analyzing, refresh to get latest analysis
+                if (data.is_recording && !isAnalyzing && !data.is_analyzing) {
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('Auto-refresh error:', error);
+            }
+        }, 10000);
+
+        // Add CSS for loading animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+
+</html>

@@ -415,7 +415,69 @@ def calculate_metrics():
 
 @app.route('/')
 def index():
-    """Main application dashboard."""
+    """Main application dashboard - Live Transcript page."""
+    # Calculate current metrics
+    metrics = calculate_metrics()
+    
+    # Determine status
+    status_text = "READY TO RECORD"
+    status_color = "#10B981"
+    if app_state['is_recording']:
+        mode_text = f"({app_state['analysis_mode'].upper()} MODE)"
+        status_text = f"RECORDING IN PROGRESS {mode_text}"
+        status_color = "#EF4444"
+    
+    # Prepare template data
+    template_data = {
+        'is_recording': app_state['is_recording'],
+        'status_text': status_text,
+        'status_color': status_color,
+        'session_id': app_state['recording_session_id'],
+        'total_sessions': app_state['total_sessions'],
+        'total_meetings_analyzed': app_state['total_meetings_analyzed'],
+        'analysis_mode': app_state['analysis_mode'],
+        'words_threshold': app_state['words_threshold'],
+        'is_analyzing': app_state['is_analyzing'],
+        **metrics
+    }
+    
+    return render_template('index.html', **template_data)
+
+@app.route('/analysis')
+def analysis():
+    """AI Analysis page."""
+    # Calculate current metrics
+    metrics = calculate_metrics()
+    
+    # Determine status
+    status_text = "READY TO RECORD"
+    status_color = "#10B981"
+    if app_state['is_recording']:
+        mode_text = f"({app_state['analysis_mode'].upper()} MODE)"
+        status_text = f"RECORDING IN PROGRESS {mode_text}"
+        status_color = "#EF4444"
+    
+    # Prepare template data
+    template_data = {
+        'is_recording': app_state['is_recording'],
+        'status_text': status_text,
+        'status_color': status_color,
+        'analysis': app_state['final_summary'] or app_state['current_analysis'],
+        'final_summary': app_state['final_summary'],
+        'session_id': app_state['recording_session_id'],
+        'total_sessions': app_state['total_sessions'],
+        'total_meetings_analyzed': app_state['total_meetings_analyzed'],
+        'analysis_mode': app_state['analysis_mode'],
+        'words_threshold': app_state['words_threshold'],
+        'is_analyzing': app_state['is_analyzing'],
+        **metrics
+    }
+    
+    return render_template('analysis.html', **template_data)
+
+@app.route('/old')
+def old_interface():
+    """Legacy combined interface (for backward compatibility)."""
     # Calculate current metrics
     metrics = calculate_metrics()
     
