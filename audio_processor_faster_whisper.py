@@ -32,10 +32,10 @@ RATE = 16000                   # 16kHz sample rate (Whisper optimal)
 
 # Transcription chunk settings
 CHUNK_DURATION_SECONDS = 2    # Process audio every 2 seconds (faster updates)
-OVERLAP_SECONDS = 1         # 0.75-second overlap (50% for better continuity)
+OVERLAP_SECONDS = 0.5         # 0.5-second overlap (25% for better continuity)
 
 # Whisper model settings
-WHISPER_MODEL_SIZE = "tiny"    # Options: tiny, base, small, medium, large
+WHISPER_MODEL_SIZE = "small"    # Options: tiny, base, small, medium, large
                                # tiny = fastest, least accurate
                                # base = good balance (RECOMMENDED)
                                # small = more accurate, slower
