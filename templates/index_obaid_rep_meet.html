@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>ðŸŽ™ï¸</text></svg>">
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -226,7 +226,7 @@
         }
 
         .control-section h3::before {
-            content: 'âš™ï¸';
+            content: '⚙️';
             font-size: 1rem;
         }
 
@@ -886,7 +886,7 @@
     <div class="container">
         <!-- Header -->
         <div class="app-header">
-            <h1>ðŸŽ™ï¸ AI Meeting Analyzer</h1>
+            <h1>🎙️ AI Meeting Analyzer</h1>
             <p class="subtitle">Real-time transcription and intelligent analysis powered by Faster-Whisper & Grok AI</p>
             <div class="status-indicator" style="background-color: {{ status_color }}20; color: {{ status_color }};">
                 <div style="width: 8px; height: 8px; background: {{ status_color }}; border-radius: 50%;"></div>
@@ -902,21 +902,21 @@
         <!-- Analysis Mode Configuration (Only show when not recording) -->
         {% if not is_recording %}
         <div class="control-section">
-            <h3>âš™ï¸ Analysis Configuration</h3>
+            <h3>⚙️ Analysis Configuration</h3>
             <div class="mode-selection">
-                <h4>ðŸ“Š Select Analysis Mode</h4>
+                <h4>📊 Select Analysis Mode</h4>
                 <div class="mode-options">
                     <div class="mode-option">
                         <input type="radio" id="mode-automatic" name="analysis-mode" value="automatic" checked>
                         <label for="mode-automatic">
-                            <div class="mode-title">ðŸ¤– Automatic Mode</div>
+                            <div class="mode-title">🤖 Automatic Mode</div>
                             <div class="mode-description">Auto-generates analysis after specified word count</div>
                         </label>
                     </div>
                     <div class="mode-option">
                         <input type="radio" id="mode-manual" name="analysis-mode" value="manual">
                         <label for="mode-manual">
-                            <div class="mode-title">ðŸ‘† Manual Mode</div>
+                            <div class="mode-title">👆 Manual Mode</div>
                             <div class="mode-description">On-demand analysis with "Analyze Now" button</div>
                         </label>
                     </div>
@@ -924,7 +924,7 @@
                 
                 <!-- Word Count Configuration (shown only for automatic mode) -->
                 <div class="word-count-config active" id="word-count-config">
-                    <h5>ðŸ“ Word Count Threshold</h5>
+                    <h5>📝 Word Count Threshold</h5>
                     <div class="word-presets">
                         <button class="preset-btn active" data-words="200">200 words<br><small>Very Frequent</small></button>
                         <button class="preset-btn" data-words="300">300 words<br><small>Frequent</small></button>
@@ -937,7 +937,7 @@
                         <button class="preset-btn" onclick="setCustomWords()">Apply</button>
                     </div>
                     <div id="selected-threshold" style="margin-top: 1rem; padding: 1rem; background: white; border-radius: 8px; text-align: center; font-weight: 700; color: var(--accent);">
-                        âœ“ Analysis will trigger every <span id="threshold-value">200</span> words
+                        ✅ Analysis will trigger every <span id="threshold-value">200</span> words
                     </div>
                 </div>
             </div>
@@ -949,13 +949,13 @@
             <h3>Recording Controls</h3>
             <div class="button-grid">
                 <button class="control-button btn-start" onclick="startRecording()" {% if is_recording %}disabled{% endif %}>
-                    ðŸ”´ Start Recording
+                    🔴 Start Recording
                 </button>
                 <button id="stop-btn"
                     class="control-button btn-stop"
                     onclick="stopRecording()"
                     {% if not is_recording %}disabled{% endif %}>
-                    â¹ï¸ Stop Recording
+                    ⏸️ Stop Recording
                 </button>
 
                 {% if is_recording %}
@@ -964,12 +964,12 @@
                     <span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span>
                     Analyzing...
                     {% else %}
-                    ðŸŽ¯ Analyze Now
+                    🎯 Analyze Now
                     {% endif %}
                 </button>
                 {% endif %}
                 <button class="control-button btn-clear" onclick="clearData()" {% if is_recording %}disabled{% endif %}>
-                    ðŸ—‘ï¸ Clear All
+                    🗑️ Clear All
                 </button>
             </div>
 
@@ -994,7 +994,7 @@
         <div class="recording-status" style="margin: 1.5rem 0;">
             <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
                 <div style="width: 12px; height: 12px; background: #fff; border-radius: 50%; animation: recordingBlink 1s infinite;"></div>
-                <span>ðŸ”´ LIVE RECORDING - {{ '%02d:%02d' | format(duration // 60, duration % 60) }}</span>
+                <span>🔴 LIVE RECORDING - {{ '%02d:%02d' | format(duration // 60, duration % 60) }}</span>
             </div>
         </div>
         <style>
@@ -1008,13 +1008,13 @@
         <!-- Tabbed Interface -->
         <div class="tab-container">
             <div class="tab-header">
-                <button class="tab-button active" onclick="showTab('transcript')">ðŸŽ™ï¸ Live Transcript</button>
-                <button class="tab-button" onclick="showTab('analysis')" id="analysis-tab-btn">ðŸ¤– AI Analysis</button>
+                <button class="tab-button active" onclick="showTab('transcript')">🎙️ Live Transcript</button>
+                <button class="tab-button" onclick="showTab('analysis')" id="analysis-tab-btn">🤖 AI Analysis</button>
             </div>
 
             <!-- Live Transcript Tab -->
             <div id="transcript" class="tab-content active">
-                <h3>ðŸŽ™ï¸ Live Transcript</h3>
+                <h3>🎙️ Live Transcript</h3>
                 
                 {% if full_text %}
                 
@@ -1022,20 +1022,20 @@
                 <div class="transcript-cleaning-control">
                     <label>
                         <input type="checkbox" id="cleanTranscriptToggle" checked>
-                        <span>ðŸ§¹ Clean Repetitions (Display Only)</span>
+                        <span>🧹 Clean Repetitions (Display Only)</span>
                     </label>
                     <p class="help-text">
                         Removes repeated words and phrases for cleaner reading..
                     </p>
                     <div id="cleaned-badge" class="cleaned-badge" style="display: none;">
-                        ðŸŽ¯ <span id="removed-count">0</span> repetitions cleaned
+                        🎯 <span id="removed-count">0</span> repetitions cleaned
                     </div>
                 </div>
 
                 <!-- UPDATED: Transcript Display with ID -->
                 <div class="transcript-container" style="max-height: 600px;">
                     <div class="transcript-meta">
-                        ðŸ“Š {{ word_count }} words â€¢ {{ segments_count }} segments â€¢ {{ '%d:%02d' | format(duration // 60, duration % 60) }} duration
+                        📊 {{ word_count }} words • {{ segments_count }} segments • {{ '%d:%02d' | format(duration // 60, duration % 60) }} duration
                     </div>
                     <!-- Added ID and data-original attribute -->
                     <div id="transcript-display" style="font-size: 1.05rem; line-height: 1.8;" data-original="{{ full_text }}">
@@ -1046,7 +1046,7 @@
                 {% else %}
                 
                 <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
-                    <div style="font-size: 4rem; margin-bottom: 1rem;">ðŸŽ™ï¸</div>
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">🎙️</div>
                     <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Ready to Record</h3>
                     <p style="color: var(--text-secondary); font-size: 1rem; max-width: 600px; margin: 0 auto;">
                         Click "Start Recording" above to begin capturing your meeting. 
@@ -1059,12 +1059,12 @@
 
             <!-- AI Analysis Tab -->
             <div id="analysis" class="tab-content">
-                <h3>ðŸ¤– AI Analysis</h3>
+                <h3>🤖 AI Analysis</h3>
                 
                 <!-- Loading State -->
                 <div id="analysis-loading" class="analysis-loading" style="display: none;">
                     <div class="loading-spinner"></div>
-                    <div class="loading-text">ðŸ§  Generating AI Analysis...</div>
+                    <div class="loading-text">🧠 Generating AI Analysis...</div>
                     <div class="loading-subtext">Analyzing your IT discussion with Grok AI</div>
                     <div class="loading-timer" id="analysis-timer">0s</div>
                 </div>
@@ -1073,12 +1073,12 @@
                 <div id="analysis-content">
                     {% if analysis %}
                     {% if final_summary %}
-                    <div class="message success" style="margin-bottom: 1.5rem;">âœ… Final Analysis Complete - Meeting session ended</div>
+                    <div class="message success" style="margin-bottom: 1.5rem;">✅ Final Analysis Complete - Meeting session ended</div>
                     {% endif %}
 
                     <!-- Analysis Complete Message -->
                     <div class="analysis-complete" id="analysis-complete-msg" style="display: none;">
-                        <span style="font-size: 1.5rem;">âœ…</span>
+                        <span style="font-size: 1.5rem;">✅</span>
                         <div style="flex: 1;">
                             <div><strong>Analysis Complete!</strong></div>
                             <div class="analysis-complete-time">Generated in <span id="analysis-time">0</span> seconds</div>
@@ -1087,26 +1087,26 @@
 
                     <!-- Technical Overview -->
                     <div class="content-card" style="background: var(--primary-light); border-left: 4px solid var(--primary);">
-                        <h4 style="color: var(--primary); margin-bottom: 0.75rem;">ðŸ“Š Technical Overview</h4>
+                        <h4 style="color: var(--primary); margin-bottom: 0.75rem;">📊 Technical Overview</h4>
                         <p style="font-size: 1rem; line-height: 1.7;">{{ analysis.get('technical_analysis', 'No analysis available yet.') }}</p>
                     </div>
 
                     <!-- Issues and Recommendations -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
                         <div>
-                            <h4 style="margin-bottom: 1rem; color: var(--warning);">âš ï¸ Potential Issues</h4>
+                            <h4 style="margin-bottom: 1rem; color: var(--warning);">⚠️ Potential Issues</h4>
                             {% for issue in analysis.get('potential_issues', []) %}
-                            <div class="badge badge-warning" style="margin-bottom: 0.5rem;">âš ï¸ Issue {{ loop.index }}</div>
+                            <div class="badge badge-warning" style="margin-bottom: 0.5rem;">⚠️ Issue {{ loop.index }}</div>
                             <p style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6;">{{ issue }}</p>
                             {% endfor %}
                             {% if not analysis.get('potential_issues') %}
-                            <div class="message success">âœ“ No critical issues detected</div>
+                            <div class="message success">✅ No critical issues detected</div>
                             {% endif %}
                         </div>
                         <div>
-                            <h4 style="margin-bottom: 1rem; color: var(--success);">âœ… Recommendations</h4>
+                            <h4 style="margin-bottom: 1rem; color: var(--success);">✅ Recommendations</h4>
                             {% for rec in analysis.get('recommendations', []) %}
-                            <div class="badge badge-success" style="margin-bottom: 0.5rem;">âœ… Recommendation {{ loop.index }}</div>
+                            <div class="badge badge-success" style="margin-bottom: 0.5rem;">✅ Recommendation {{ loop.index }}</div>
                             <p style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6;">{{ rec }}</p>
                             {% endfor %}
                             {% if not analysis.get('recommendations') %}
@@ -1118,9 +1118,9 @@
                     <!-- Questions and Actions -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                         <div>
-                            <h4 style="margin-bottom: 1rem;">â“ Clarifying Questions</h4>
+                            <h4 style="margin-bottom: 1rem;">❓ Clarifying Questions</h4>
                             {% for question in analysis.get('clarifying_questions', []) %}
-                            <div class="badge badge-info" style="margin-bottom: 0.5rem;">â“ Q{{ loop.index }}</div>
+                            <div class="badge badge-info" style="margin-bottom: 0.5rem;">❓ Q{{ loop.index }}</div>
                             <p style="margin: 0.5rem 0 1rem 0; font-size: 0.9rem;">{{ question }}</p>
                             {% endfor %}
                             {% if not analysis.get('clarifying_questions') %}
@@ -1130,7 +1130,7 @@
                             {% endif %}
                         </div>
                         <div>
-                            <h4 style="margin-bottom: 1rem;">ðŸ“‹ Action Items</h4>
+                            <h4 style="margin-bottom: 1rem;">📋 Action Items</h4>
                             {% for action in analysis.get('action_items', []) %}
                             <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--primary-light); border-radius: 8px; border-left: 3px solid var(--primary);">
                                 <strong>{{ loop.index }}.</strong> {{ action }}
@@ -1145,7 +1145,7 @@
                     </div>
                     {% else %}
                     <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
-                        <div style="font-size: 4rem; margin-bottom: 1rem;">ðŸ¤–</div>
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🤖</div>
                         <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">AI Analysis Ready</h3>
                         <p style="color: var(--text-secondary); font-size: 1rem; max-width: 600px; margin: 0 auto;">
                             Start recording to see real-time AI analysis powered by Grok AI.
@@ -1162,7 +1162,7 @@
         <div class="app-footer" style="margin-top: 3rem; padding: 2rem; text-align: center;">
             <p style="margin: 0.5rem 0;"><strong>AI IT Meeting Analyzer</strong> - Real-time transcription & intelligent analysis</p>
             <p style="font-size: 0.85rem; opacity: 0.7; margin: 0.5rem 0;">
-                Powered by Faster-Whisper & Grok AI â€¢ Local transcription â€¢ Cloud analysis
+                Powered by Faster-Whisper & Grok AI • Local transcription • Cloud analysis
             </p>
         </div>
     </div>
@@ -1228,7 +1228,7 @@
         function resetStopButtonUI(disable = true) {
             const btn = document.getElementById('stop-btn');
             if (!btn) return;
-            btn.innerHTML = 'â¹ï¸ Stop Recording';
+            btn.innerHTML = '⏸️ Stop Recording';
             btn.disabled = disable;
             }
 
@@ -1505,7 +1505,7 @@
                 if (result.success) {
                     showMessage('Recording stopped. Generating final analysis...', 'info');
                     
-                    // ðŸŽ¯ KEY: Poll for final analysis without page reload
+                    // 🎯 KEY: Poll for final analysis without page reload
                     pollForFinalAnalysis();
                 } else {
                     showMessage(result.message, 'error');
@@ -1532,7 +1532,7 @@
                 
                 if (pollCount > maxPolls) {
                     clearInterval(stopPollInterval);
-                    showMessage('âš ï¸ Analysis taking longer than expected. Please refresh the page.', 'warning');
+                    showMessage('⚠️ Analysis taking longer than expected. Please refresh the page.', 'warning');
                     return;
                 }
                 
@@ -1540,7 +1540,7 @@
                     const response = await fetch('/api/status');
                     const data = await response.json();
                     
-                    console.log(`ðŸ” Poll ${pollCount}: analyzing=${data.is_analyzing}, recording=${data.is_recording}, final=${data.final_summary}`);
+                    console.log(`🔍 Poll ${pollCount}: analyzing=${data.is_analyzing}, recording=${data.is_recording}, final=${data.final_summary}`);
                     
                     if (!data.is_analyzing && !data.is_recording && data.final_summary) {
                         clearInterval(stopPollInterval);
@@ -1548,14 +1548,42 @@
                         
                         localStorage.setItem('showAnalysisTab', 'true');
                         
-                        showMessage(`âœ… Final analysis complete in ${generationTime.toFixed(1)}s! Switching to analysis tab...`, 'success');
+                        showMessage(`✅ Final analysis complete in ${generationTime.toFixed(1)}s! Switching to analysis tab...`, 'success');
                         
                         setTimeout(() => location.reload(), 2000);
                     }
                 } catch (error) {
-                    console.error('âŒ Polling error:', error);
+                    console.error('❌ Polling error:', error);
                 }
             }, 1500);
+        }
+        function resetButtonsAfterFinalAnalysis() {
+            // Enable Start Recording button
+            const startBtn = document.querySelector('.btn-start');
+            if (startBtn) {
+                startBtn.disabled = false;
+            }
+            
+            // Disable Stop Recording button
+            const stopBtn = document.getElementById('stop-btn');
+            if (stopBtn) {
+                stopBtn.innerHTML = '⏸️ Stop Recording';
+                stopBtn.disabled = true;
+            }
+            
+            // Enable Clear All button
+            const clearBtn = document.querySelector('.btn-clear');
+            if (clearBtn) {
+                clearBtn.disabled = false;
+            }
+            
+            // Hide/Remove Analyze Now button (meeting has ended)
+            const analyzeBtn = document.getElementById('analyze-btn');
+            if (analyzeBtn) {
+                analyzeBtn.style.display = 'none';
+            }
+            
+            console.log('✅ Buttons reset after final analysis');
         }
         /**
  * Poll for final analysis after recording stops (without page reload)
@@ -1570,7 +1598,7 @@
                 if (pollCount > maxPolls) {
                     clearInterval(finalPollInterval);
                     stopAnalysisLoading();
-                    showMessage('âš ï¸ Analysis taking longer than expected. Please refresh the page.', 'warning');
+                    showMessage('⚠️ Analysis taking longer than expected. Please refresh the page.', 'warning');
                     return;
                 }
                 
@@ -1578,27 +1606,29 @@
                     const response = await fetch('/api/status');
                     const data = await response.json();
                     
-                    console.log(`ðŸ“Š Final Poll ${pollCount}: analyzing=${data.is_analyzing}, recording=${data.is_recording}, has_final=${data.final_summary}`);
+                    console.log(`📊 Final Poll ${pollCount}: analyzing=${data.is_analyzing}, recording=${data.is_recording}, has_final=${data.final_summary}`);
                     
                     // Check if final analysis is complete
-                    if (!data.is_analyzing && !data.is_recording && data.final_summary && data.analysis) {
-                        clearInterval(finalPollInterval);
-                        const generationTime = (Date.now() - analysisStartTime) / 1000;
-                        
-                        stopAnalysisLoading(generationTime);
-                        stopAutoRefresh();
-                        // ðŸŽ¯ Update analysis content
-                        updateAnalysisContent(data.analysis);
-                        
-                        // Show success message
-                        showMessage(`âœ… Final analysis complete in ${generationTime.toFixed(1)}s!`, 'success');
-                        
-                        // Update recording state
-                        isRecording = false;
-                        resetStopButtonUI(true);
-                        
-                        console.log('âœ… Final analysis displayed successfully');
-                    }
+                if (!data.is_analyzing && !data.is_recording && data.final_summary && data.analysis) {
+                    clearInterval(finalPollInterval);
+                    const generationTime = (Date.now() - analysisStartTime) / 1000;
+                    
+                    stopAnalysisLoading(generationTime);
+                    stopAutoRefresh();
+                    // 🎯 Update analysis content
+                    updateAnalysisContent(data.analysis);
+                    
+                    // Show success message
+                    showMessage(`✅ Final analysis complete in ${generationTime.toFixed(1)}s!`, 'success');
+                    
+                    // Update recording state
+                    isRecording = false;
+                    
+                    // 🎯 FIX: Update all button states after final analysis
+                    resetButtonsAfterFinalAnalysis();
+                    
+                    console.log('✅ Final analysis displayed successfully');
+                }
                 } catch (error) {
                     console.error('Final polling error:', error);
                 }
@@ -1742,7 +1772,7 @@
                     const response = await fetch('/api/status');
                     const data = await response.json();
                     
-                    console.log(`ðŸ“Š Poll ${pollCount}: analyzing=${data.is_analyzing}, has_analysis=${!!data.analysis}`);
+                    console.log(`📊 Poll ${pollCount}: analyzing=${data.is_analyzing}, has_analysis=${!!data.analysis}`);
                     
                     // Check if analysis is complete
                     if (!data.is_analyzing && data.analysis) {
@@ -1753,10 +1783,10 @@
                         
                         if (callback) callback();
                         
-                        // ðŸŽ¯ KEY FIX: Update the analysis content dynamically
+                        // 🎯 KEY FIX: Update the analysis content dynamically
                         updateAnalysisContent(data.analysis);
                         
-                        showMessage(`âœ… Analysis complete in ${generationTime.toFixed(1)}s!`, 'success');
+                        showMessage(`✅ Analysis complete in ${generationTime.toFixed(1)}s!`, 'success');
                     }
                 } catch (error) {
                     console.error('Polling error:', error);
@@ -1767,11 +1797,11 @@
  * Dynamically update analysis content without page reload
  */
         function updateAnalysisContent(analysis) {
-            console.log('ðŸ”„ Updating analysis content...', analysis);
+            console.log('🔤 Updating analysis content...', analysis);
             
             const analysisContent = document.getElementById('analysis-content');
             if (!analysisContent) {
-                console.error('âŒ analysis-content element not found');
+                console.error('❌ analysis-content element not found');
                 return;
             }
             
@@ -1779,7 +1809,7 @@
             const html = `
                 <!-- Technical Overview -->
                 <div class="content-card" style="background: var(--primary-light); border-left: 4px solid var(--primary);">
-                    <h4 style="color: var(--primary); margin-bottom: 0.75rem;">ðŸ“Š Technical Overview</h4>
+                    <h4 style="color: var(--primary); margin-bottom: 0.75rem;">📊 Technical Overview</h4>
                     <p style="font-size: 1rem; line-height: 1.7;">${analysis.technical_analysis || 'No analysis available yet.'}</p>
                 </div>
 
@@ -1787,13 +1817,13 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
                     <!-- Potential Issues -->
                     <div>
-                        <h4 style="margin-bottom: 1rem; color: var(--warning);">âš ï¸ Potential Issues</h4>
+                        <h4 style="margin-bottom: 1rem; color: var(--warning);">⚠️ Potential Issues</h4>
                         ${generateIssuesHTML(analysis.potential_issues || [])}
                     </div>
                     
                     <!-- Recommendations -->
                     <div>
-                        <h4 style="margin-bottom: 1rem; color: var(--success);">âœ… Recommendations</h4>
+                        <h4 style="margin-bottom: 1rem; color: var(--success);">✅ Recommendations</h4>
                         ${generateRecommendationsHTML(analysis.recommendations || [])}
                     </div>
                 </div>
@@ -1802,13 +1832,13 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                     <!-- Clarifying Questions -->
                     <div>
-                        <h4 style="margin-bottom: 1rem;">â“ Clarifying Questions</h4>
+                        <h4 style="margin-bottom: 1rem;">❓ Clarifying Questions</h4>
                         ${generateQuestionsHTML(analysis.clarifying_questions || [])}
                     </div>
                     
                     <!-- Action Items -->
                     <div>
-                        <h4 style="margin-bottom: 1rem;">ðŸ“‹ Action Items</h4>
+                        <h4 style="margin-bottom: 1rem;">📋 Action Items</h4>
                         ${generateActionsHTML(analysis.action_items || [])}
                     </div>
                 </div>
@@ -1817,7 +1847,7 @@
             // Update the DOM
             analysisContent.innerHTML = html;
             
-            console.log('âœ… Analysis content updated successfully');
+            console.log('✅ Analysis content updated successfully');
             
         }
 
@@ -1826,11 +1856,11 @@
          */
         function generateIssuesHTML(issues) {
             if (!issues || issues.length === 0) {
-                return '<div class="message success">âœ“ No critical issues detected</div>';
+                return '<div class="message success">✅ No critical issues detected</div>';
             }
             
             return issues.map((issue, index) => `
-                <div class="badge badge-warning" style="margin-bottom: 0.5rem;">âš ï¸ Issue ${index + 1}</div>
+                <div class="badge badge-warning" style="margin-bottom: 0.5rem;">⚠️ Issue ${index + 1}</div>
                 <p style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6;">${escapeHtml(issue)}</p>
             `).join('');
         }
@@ -1844,7 +1874,7 @@
             }
             
             return recommendations.map((rec, index) => `
-                <div class="badge badge-success" style="margin-bottom: 0.5rem;">âœ… Recommendation ${index + 1}</div>
+                <div class="badge badge-success" style="margin-bottom: 0.5rem;">✅ Recommendation ${index + 1}</div>
                 <p style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem; line-height: 1.6;">${escapeHtml(rec)}</p>
             `).join('');
         }
@@ -1860,7 +1890,7 @@
             }
             
             return questions.map((question, index) => `
-                <div class="badge badge-info" style="margin-bottom: 0.5rem;">â“ Q${index + 1}</div>
+                <div class="badge badge-info" style="margin-bottom: 0.5rem;">❓ Q${index + 1}</div>
                 <p style="margin: 0.5rem 0 1rem 0; font-size: 0.9rem;">${escapeHtml(question)}</p>
             `).join('');
         }
@@ -1898,7 +1928,7 @@
             notification.className = 'analysis-ready-notification';
             notification.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 1rem;">
-                    <span style="font-size: 2rem;">âœ…</span>
+                    <span style="font-size: 2rem;">✅</span>
                     <div>
                         <div style="font-weight: 700; font-size: 1.1rem;">Analysis Complete!</div>
                         <div style="font-size: 0.9rem; opacity: 0.9;">Click here to view results</div>
@@ -2002,7 +2032,7 @@
                 const transcriptMeta = document.querySelector('.transcript-meta');
                 if (transcriptMeta) {
                     const wordCount = data.full_text.split(' ').length;
-                    transcriptMeta.innerHTML = `ðŸ“Š ${wordCount} words â€¢ ${data.segment_count} segments`;
+                    transcriptMeta.innerHTML = `📊 ${wordCount} words • ${data.segment_count} segments`;
                 }
             } catch (error) {
                 console.error('Error updating transcript:', error);

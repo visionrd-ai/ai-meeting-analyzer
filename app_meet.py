@@ -156,14 +156,14 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
                 analysis = app_state['summarizer'].add_transcript(text, auto_analyze=True)
                 if analysis:
                     app_state['current_analysis'] = analysis
-                    print("âœ“ Automatic analysis updated")
+                    print(" Automatic analysis updated")
             except Exception as e:
                 print(f"Error updating live analysis: {e}")
         elif app_state['is_recording'] and app_state['summarizer']:
             # Manual mode - just add transcript without analyzing
             try:
                 app_state['summarizer'].add_transcript(text, auto_analyze=False)
-                print("âœ“ Transcript added (manual mode - no auto-analysis)")
+                print("Transcript added (manual mode - no auto-analysis)")
             except Exception as e:
                 print(f"Error adding transcript: {e}")
                 
@@ -185,7 +185,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
     if not xai_key:
         return {
             "success": False, 
-            "message": "âŒ Missing XAI_API_KEY! Please set your API key in the .env file."
+            "message": "Missing XAI_API_KEY! Please set your API key in the .env file."
         }
     
     try:
@@ -238,7 +238,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
         if not app_state['audio_processor'].is_recording:
             return {
                 "success": False,
-                "message": "âŒ Failed to start audio recording. Please check your microphone permissions."
+                "message": "Failed to start audio recording. Please check your microphone permissions."
             }
         
         app_state['is_recording'] = True
@@ -251,7 +251,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
         print("âœ“ Recording started successfully!")
         return {
             "success": True, 
-            "message": f"ðŸŽ™ï¸ Recording started in {mode.upper()} mode ({mode_desc})!"
+            "message": f"Recording started in {mode.upper()} mode ({mode_desc})!"
         }
         
     except Exception as e:
@@ -260,7 +260,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
         traceback.print_exc()
         return {
             "success": False, 
-            "message": f"âŒ Error starting recording: {str(e)}"
+            "message": f"Error starting recording: {str(e)}"
         }
 
 def stop_recording():
@@ -285,7 +285,7 @@ def stop_recording():
             app_state['is_analyzing'] = False
             return {
                 "success": False, 
-                "message": "âš ï¸ No transcripts found! Please ensure you spoke during the recording."
+                "message": "No transcripts found! Please ensure you spoke during the recording."
             }
         
         # Generate final analysis in background thread
@@ -297,9 +297,9 @@ def stop_recording():
                     for segment in segments:
                         fresh_summarizer.add_transcript(segment, auto_analyze=False)
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
-                    print("âœ“ Final summary generated")
+                    print("Final summary generated")
                 else:
-                    print("âš ï¸ No API key for final summary")
+                    print("No API key for final summary")
             except Exception as e:
                 print(f"Error generating final summary: {e}")
                 import traceback
@@ -316,7 +316,7 @@ def stop_recording():
         
         return {
             "success": True, 
-            "message": "âœ… Recording stopped. Generating final analysis..."
+            "message": "Recording stopped. Generating final analysis..."
         }
         
     except Exception as e:
@@ -324,7 +324,7 @@ def stop_recording():
         app_state['is_analyzing'] = False
         return {
             "success": False, 
-            "message": f"âŒ Error stopping recording: {str(e)}"
+            "message": f" Error stopping recording: {str(e)}"
         }
 
 def trigger_manual_analysis():
@@ -332,20 +332,20 @@ def trigger_manual_analysis():
     if not app_state['is_recording'] or not app_state['summarizer']:
         return {
             "success": False,
-            "message": "âŒ No active recording session!"
+            "message": "No active recording session!"
         }
     
     if app_state['is_analyzing']:
         return {
             "success": False,
-            "message": "âš ï¸ Analysis already in progress. Please wait..."
+            "message": " Analysis already in progress. Please wait..."
         }
     
     segments = load_transcripts()
     if len(segments) == 0:
         return {
             "success": False,
-            "message": "âš ï¸ No transcript available yet! Start speaking."
+            "message": " No transcript available yet! Start speaking."
         }
     
     # Check word count
@@ -353,7 +353,7 @@ def trigger_manual_analysis():
     if word_count < 10:
         return {
             "success": False,
-            "message": f"âš ï¸ Only {word_count} words transcribed. Speak more for better analysis."
+            "message": f" Only {word_count} words transcribed. Speak more for better analysis."
         }
     
     # Mark as analyzing
@@ -370,7 +370,7 @@ def trigger_manual_analysis():
             analysis = app_state['summarizer'].force_analysis()
             
             elapsed = time.time() - start_time
-            print(f"âœ“ Manual analysis complete in {elapsed:.2f} seconds")
+            print(f" Manual analysis complete in {elapsed:.2f} seconds")
             
             if analysis:
                 app_state['current_analysis'] = analysis
@@ -636,7 +636,7 @@ def internal_error(error):
 
 def initialize_app():
     """Initialize the application on startup."""
-    print("ðŸš€ Initializing AI IT Meeting Analyzer...")
+    print("Initializing AI IT Meeting Analyzer...")
     
     # Load application statistics
     load_app_stats()
@@ -644,22 +644,22 @@ def initialize_app():
     # Check for required API key
     xai_key = os.getenv("XAI_API_KEY")
     if not xai_key:
-        print("âš ï¸  WARNING: XAI_API_KEY not found in environment variables!")
+        print("WARNING: XAI_API_KEY not found in environment variables!")
         print("   Please set your xAI API key in the .env file.")
         print("   Get your API key from: https://console.x.ai")
     else:
-        print("âœ… XAI API key loaded successfully")
+        print("XAI API key loaded successfully")
     
     # Create templates directory if it doesn't exist
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
     if not os.path.exists(templates_dir):
         os.makedirs(templates_dir)
-        print(f"ðŸ“ Created templates directory: {templates_dir}")
+        print(f"Created templates directory: {templates_dir}")
     
-    print(f"ðŸ“Š Total sessions: {app_state['total_sessions']}")
-    print(f"ðŸ“ˆ Total meetings analyzed: {app_state['total_meetings_analyzed']}")
-    print("ðŸŽ™ï¸ AI IT Meeting Analyzer is ready!")
-    print("ðŸŒ Open http://localhost:5000 in your browser to start")
+    print(f" Total sessions: {app_state['total_sessions']}")
+    print(f"Total meetings analyzed: {app_state['total_meetings_analyzed']}")
+    print("AI IT Meeting Analyzer is ready!")
+    print("Open http://localhost:5000 in your browser to start")
 
 # ================================================================
 # MAIN APPLICATION ENTRY POINT

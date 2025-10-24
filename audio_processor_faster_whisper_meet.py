@@ -39,9 +39,13 @@ CHUNK_DURATION_SECONDS = 2
 OVERLAP_SECONDS = 0.5
 
 # Whisper model settings
-WHISPER_MODEL_SIZE = "base"
-DEVICE = "cpu"
-COMPUTE_TYPE = "int8"
+WHISPER_MODEL_SIZE = "base" # Options: tiny, base, small, medium, large
+                               # tiny = fastest, least accurate
+                               # base = good balance (RECOMMENDED)
+                               # small = more accurate, slower
+                               # medium/large = very accurate, very slow
+DEVICE = "cpu" # if available, use GPU
+COMPUTE_TYPE = "int8" # int8 = faster, float16 = more accurate (needs GPU)
 
 # Audio source types
 AudioSourceType = Literal["mic", "system", "both"]
