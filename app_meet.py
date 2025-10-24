@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from dotenv import load_dotenv
-from audio_processor_faster_whisper import AudioProcessor
+from audio_processor_faster_whisper_meet import EnhancedAudioProcessor
 from summarizer import MeetingSummarizer
 import threading
 
@@ -39,6 +39,7 @@ app_state = {
     'words_threshold': 200,  # Default word count for automatic mode
     'is_analyzing': False,  # Track if analysis is in progress
     'analysis_start_time': None,  # Track when analysis started
+    'audio_source': 'mic',  # 'mic', 'system', or 'both'
 }
 
 # ================================================================
@@ -128,13 +129,25 @@ def clear_storage():
 # CORE BUSINESS LOGIC
 # ================================================================
 
-def on_new_transcript(text: str):
-    """Callback function for new transcript segments."""
+def on_new_transcript(text: str, source_label: str = "Mic"):
+    """
+    Callback function for new transcript segments.
+    
+    Args:
+        text: Transcribed text
+        source_label: "Mic" or "System" indicating audio source
+    """
     try:
+        # Format transcript with source label for dual mode
+        if app_state['audio_source'] == 'both':
+            formatted_text = f"[{source_label}] {text}"
+        else:
+            formatted_text = text
+        
         segments = load_transcripts()
-        segments.append(text)
+        segments.append(formatted_text)
         save_transcripts(segments)
-        print(f"New transcript segment: {text[:50]}...")
+        print(f"[{source_label}] {text[:50]}...")
         
         # Trigger live analysis update (only for automatic mode)
         if app_state['is_recording'] and app_state['summarizer'] and app_state['analysis_mode'] == 'automatic':
@@ -143,14 +156,14 @@ def on_new_transcript(text: str):
                 analysis = app_state['summarizer'].add_transcript(text, auto_analyze=True)
                 if analysis:
                     app_state['current_analysis'] = analysis
-                    print("✓ Automatic analysis updated")
+                    print("âœ“ Automatic analysis updated")
             except Exception as e:
                 print(f"Error updating live analysis: {e}")
         elif app_state['is_recording'] and app_state['summarizer']:
             # Manual mode - just add transcript without analyzing
             try:
                 app_state['summarizer'].add_transcript(text, auto_analyze=False)
-                print("✓ Transcript added (manual mode - no auto-analysis)")
+                print("âœ“ Transcript added (manual mode - no auto-analysis)")
             except Exception as e:
                 print(f"Error adding transcript: {e}")
                 
@@ -159,13 +172,20 @@ def on_new_transcript(text: str):
         import traceback
         traceback.print_exc()
 
-def start_recording(mode='automatic', words_threshold=200):
-    """Start the recording session with audio processing and AI analysis."""
+def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
+    """
+    Start the recording session with audio processing and AI analysis.
+    
+    Args:
+        mode: 'automatic' or 'manual' analysis mode
+        words_threshold: Word count threshold for automatic analysis
+        audio_source: 'mic', 'system', or 'both'
+    """
     xai_key = os.getenv("XAI_API_KEY")
     if not xai_key:
         return {
             "success": False, 
-            "message": "❌ Missing XAI_API_KEY! Please set your API key in the .env file."
+            "message": "âŒ Missing XAI_API_KEY! Please set your API key in the .env file."
         }
     
     try:
@@ -174,21 +194,25 @@ def start_recording(mode='automatic', words_threshold=200):
         
         app_state['analysis_mode'] = mode
         app_state['words_threshold'] = words_threshold
+        app_state['audio_source'] = audio_source
         
         # Initialize AI components with appropriate settings
-        print(f"Initializing AI components in {mode} mode...")
+        print(f"Initializing AI components in {mode} mode with {audio_source} audio source...")
         
         if mode == 'automatic':
             # Automatic mode: set word threshold
             app_state['summarizer'] = MeetingSummarizer(xai_key, words_per_analysis=words_threshold)
-            print(f"✓ Automatic mode: analysis every {words_threshold} words")
+            print(f"âœ“ Automatic mode: analysis every {words_threshold} words")
         else:
             # Manual mode: disable automatic analysis
             app_state['summarizer'] = MeetingSummarizer(xai_key, words_per_analysis=0)
-            print(f"✓ Manual mode: on-demand analysis only")
+            print(f"âœ“ Manual mode: on-demand analysis only")
         
         print("Initializing audio processor...")
-        app_state['audio_processor'] = AudioProcessor(on_new_transcript)
+        app_state['audio_processor'] = EnhancedAudioProcessor(
+            on_new_transcript,
+            audio_source=audio_source
+        )
         
         # Set session metadata
         app_state['start_time'] = datetime.now()
@@ -201,7 +225,8 @@ def start_recording(mode='automatic', words_threshold=200):
             'session_id': app_state['recording_session_id'],
             'xai_model': 'grok-4-fast-reasoning',
             'analysis_mode': mode,
-            'words_threshold': words_threshold
+            'words_threshold': words_threshold,
+            'audio_source': audio_source
         }
         save_metadata(metadata)
         
@@ -213,7 +238,7 @@ def start_recording(mode='automatic', words_threshold=200):
         if not app_state['audio_processor'].is_recording:
             return {
                 "success": False,
-                "message": "❌ Failed to start audio recording. Please check your microphone permissions."
+                "message": "âŒ Failed to start audio recording. Please check your microphone permissions."
             }
         
         app_state['is_recording'] = True
@@ -223,10 +248,10 @@ def start_recording(mode='automatic', words_threshold=200):
         save_app_stats()
         
         mode_desc = f"every {words_threshold} words" if mode == 'automatic' else "on-demand"
-        print("✓ Recording started successfully!")
+        print("âœ“ Recording started successfully!")
         return {
             "success": True, 
-            "message": f"🎙️ Recording started in {mode.upper()} mode ({mode_desc})!"
+            "message": f"ðŸŽ™ï¸ Recording started in {mode.upper()} mode ({mode_desc})!"
         }
         
     except Exception as e:
@@ -235,7 +260,7 @@ def start_recording(mode='automatic', words_threshold=200):
         traceback.print_exc()
         return {
             "success": False, 
-            "message": f"❌ Error starting recording: {str(e)}"
+            "message": f"âŒ Error starting recording: {str(e)}"
         }
 
 def stop_recording():
@@ -260,7 +285,7 @@ def stop_recording():
             app_state['is_analyzing'] = False
             return {
                 "success": False, 
-                "message": "⚠️ No transcripts found! Please ensure you spoke during the recording."
+                "message": "âš ï¸ No transcripts found! Please ensure you spoke during the recording."
             }
         
         # Generate final analysis in background thread
@@ -272,9 +297,9 @@ def stop_recording():
                     for segment in segments:
                         fresh_summarizer.add_transcript(segment, auto_analyze=False)
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
-                    print("✓ Final summary generated")
+                    print("âœ“ Final summary generated")
                 else:
-                    print("⚠️ No API key for final summary")
+                    print("âš ï¸ No API key for final summary")
             except Exception as e:
                 print(f"Error generating final summary: {e}")
                 import traceback
@@ -291,7 +316,7 @@ def stop_recording():
         
         return {
             "success": True, 
-            "message": "✅ Recording stopped. Generating final analysis..."
+            "message": "âœ… Recording stopped. Generating final analysis..."
         }
         
     except Exception as e:
@@ -299,7 +324,7 @@ def stop_recording():
         app_state['is_analyzing'] = False
         return {
             "success": False, 
-            "message": f"❌ Error stopping recording: {str(e)}"
+            "message": f"âŒ Error stopping recording: {str(e)}"
         }
 
 def trigger_manual_analysis():
@@ -307,20 +332,20 @@ def trigger_manual_analysis():
     if not app_state['is_recording'] or not app_state['summarizer']:
         return {
             "success": False,
-            "message": "❌ No active recording session!"
+            "message": "âŒ No active recording session!"
         }
     
     if app_state['is_analyzing']:
         return {
             "success": False,
-            "message": "⚠️ Analysis already in progress. Please wait..."
+            "message": "âš ï¸ Analysis already in progress. Please wait..."
         }
     
     segments = load_transcripts()
     if len(segments) == 0:
         return {
             "success": False,
-            "message": "⚠️ No transcript available yet! Start speaking."
+            "message": "âš ï¸ No transcript available yet! Start speaking."
         }
     
     # Check word count
@@ -328,7 +353,7 @@ def trigger_manual_analysis():
     if word_count < 10:
         return {
             "success": False,
-            "message": f"⚠️ Only {word_count} words transcribed. Speak more for better analysis."
+            "message": f"âš ï¸ Only {word_count} words transcribed. Speak more for better analysis."
         }
     
     # Mark as analyzing
@@ -338,14 +363,14 @@ def trigger_manual_analysis():
     # Perform analysis in background thread
     def perform_analysis():
         try:
-            print(f"🎯 Manual analysis triggered ({word_count} words)")
+            print(f"ðŸŽ¯ Manual analysis triggered ({word_count} words)")
             start_time = time.time()
             
             # Use force_analysis which is optimized for comprehensive analysis
             analysis = app_state['summarizer'].force_analysis()
             
             elapsed = time.time() - start_time
-            print(f"✓ Manual analysis complete in {elapsed:.2f} seconds")
+            print(f"âœ“ Manual analysis complete in {elapsed:.2f} seconds")
             
             if analysis:
                 app_state['current_analysis'] = analysis
@@ -361,7 +386,7 @@ def trigger_manual_analysis():
     
     return {
         "success": True,
-        "message": f"🧠 Analyzing {word_count} words..."
+        "message": f"ðŸ§  Analyzing {word_count} words..."
     }
 
 def calculate_metrics():
@@ -438,10 +463,11 @@ def index():
         'analysis_mode': app_state['analysis_mode'],
         'words_threshold': app_state['words_threshold'],
         'is_analyzing': app_state['is_analyzing'],
+        'audio_source': app_state['audio_source'],
         **metrics
     }
     
-    return render_template('index_obaid_rep.html', **template_data)
+    return render_template('index_obaid_rep_meet.html', **template_data)
 
 @app.route('/analysis')
 def analysis():
@@ -470,6 +496,7 @@ def analysis():
         'analysis_mode': app_state['analysis_mode'],
         'words_threshold': app_state['words_threshold'],
         'is_analyzing': app_state['is_analyzing'],
+        'audio_source': app_state['audio_source'],
         **metrics
     }
     
@@ -502,6 +529,7 @@ def old_interface():
         'analysis_mode': app_state['analysis_mode'],
         'words_threshold': app_state['words_threshold'],
         'is_analyzing': app_state['is_analyzing'],
+        'audio_source': app_state['audio_source'],
         **metrics
     }
     
@@ -510,12 +538,13 @@ def old_interface():
 @app.route('/start_recording', methods=['POST'])
 def start_recording_route():
     """API endpoint to start recording."""
-    # Get mode and threshold from request (if provided)
+    # Get mode, threshold, and audio source from request
     data = request.get_json() or {}
     mode = data.get('mode', 'automatic')
     words_threshold = data.get('words_threshold', 200)
+    audio_source = data.get('audio_source', 'mic')
     
-    result = start_recording(mode=mode, words_threshold=words_threshold)
+    result = start_recording(mode=mode, words_threshold=words_threshold, audio_source=audio_source)
     return jsonify(result)
 
 @app.route('/stop_recording', methods=['POST'])
@@ -540,11 +569,11 @@ def clear_data_route():
         app_state['is_analyzing'] = False
         return jsonify({
             "success": True, 
-            "message": "🗑️ All data cleared successfully!"
+            "message": "ðŸ—‘ï¸ All data cleared successfully!"
         })
     return jsonify({
         "success": False, 
-        "message": "❌ Cannot clear data while recording is in progress."
+        "message": "âŒ Cannot clear data while recording is in progress."
     })
 
 @app.route('/api/status')
@@ -555,6 +584,7 @@ def get_status():
     return jsonify({
         'is_recording': app_state['is_recording'],
         'is_analyzing': app_state['is_analyzing'],
+        'audio_source': app_state['audio_source'],
         'session_id': app_state['recording_session_id'],
         'analysis': app_state['final_summary'] or app_state['current_analysis'],
         'final_summary': bool(app_state['final_summary']),
@@ -562,6 +592,7 @@ def get_status():
         'total_meetings_analyzed': app_state['total_meetings_analyzed'],
         'analysis_mode': app_state['analysis_mode'],
         'words_threshold': app_state['words_threshold'],
+        'audio_source': app_state['audio_source'],
         **metrics
     })
 
@@ -605,7 +636,7 @@ def internal_error(error):
 
 def initialize_app():
     """Initialize the application on startup."""
-    print("🚀 Initializing AI IT Meeting Analyzer...")
+    print("ðŸš€ Initializing AI IT Meeting Analyzer...")
     
     # Load application statistics
     load_app_stats()
@@ -613,22 +644,22 @@ def initialize_app():
     # Check for required API key
     xai_key = os.getenv("XAI_API_KEY")
     if not xai_key:
-        print("⚠️  WARNING: XAI_API_KEY not found in environment variables!")
+        print("âš ï¸  WARNING: XAI_API_KEY not found in environment variables!")
         print("   Please set your xAI API key in the .env file.")
         print("   Get your API key from: https://console.x.ai")
     else:
-        print("✅ XAI API key loaded successfully")
+        print("âœ… XAI API key loaded successfully")
     
     # Create templates directory if it doesn't exist
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
     if not os.path.exists(templates_dir):
         os.makedirs(templates_dir)
-        print(f"📁 Created templates directory: {templates_dir}")
+        print(f"ðŸ“ Created templates directory: {templates_dir}")
     
-    print(f"📊 Total sessions: {app_state['total_sessions']}")
-    print(f"📈 Total meetings analyzed: {app_state['total_meetings_analyzed']}")
-    print("🎙️ AI IT Meeting Analyzer is ready!")
-    print("🌐 Open http://localhost:5000 in your browser to start")
+    print(f"ðŸ“Š Total sessions: {app_state['total_sessions']}")
+    print(f"ðŸ“ˆ Total meetings analyzed: {app_state['total_meetings_analyzed']}")
+    print("ðŸŽ™ï¸ AI IT Meeting Analyzer is ready!")
+    print("ðŸŒ Open http://localhost:5000 in your browser to start")
 
 # ================================================================
 # MAIN APPLICATION ENTRY POINT

@@ -3,6 +3,7 @@ from openai import OpenAI
 from typing import Dict, List, Optional
 import json
 from datetime import datetime
+import re
 
 # ============================================================================
 # CONFIGURATION - Now configurable via constructor
@@ -13,6 +14,25 @@ DEFAULT_WORDS_PER_ANALYSIS = 200
 DEFAULT_WORDS_PER_ROLLING_SUMMARY = 300
 MAX_PRIOR_SUMMARY_WORDS = 1000
 GROK_MODEL = "grok-4-fast-reasoning"
+
+# Focus detection keywords
+FOCUS_TRIGGERS = [
+    "focus on this",
+    "focus on",
+    "analyze this",
+    "analyze this point",
+    "important point",
+    "pay attention to",
+    "this is important",
+    "key point",
+    "critical",
+    "take note",
+    "highlight this",
+    "remember this",
+    "need analysis on",
+    "analyze",
+    "important"
+]
 
 # ============================================================================
 
@@ -35,14 +55,18 @@ You are an expert IT consultant AI analyzing a live technical meeting. Your role
    - Software Architecture
    - Database Design
    - and other if discussed
+   - AI / ML
 
 5. **BE ITERATIVE**: Build on previous context. Avoid repeating the same issues/suggestions.
 
-6. **BE CONCISE**: Keep feedback actionable and to-the-point.
+6. **BE CONCISE**: Keep feedback actionable and to-the-point. but include all details.
+
+7. **PRIORITIZE USER-FLAGGED TOPICS**: When users explicitly request focus on specific points (using phrases like "focus on this", "analyze this point", "important"), provide comprehensive, 
+detailed analysis of those topics with HIGHER PRIORITY and MORE DEPTH. Add a phrase like "The user flagged this as important, so extra attention is given."
 
 **OUTPUT FORMAT (JSON):**
 {
-  "technical_analysis": "Brief summary of what's being discussed technically (1-2 sentences)",
+  "technical_analysis": "Brief summary of what's being discussed technically (2-3 sentences)",
   "potential_issues": [
     "Issue 1: Clear description of the problem/risk",
     "Issue 2: Another potential problem"
@@ -67,6 +91,7 @@ You are an expert IT consultant AI analyzing a live technical meeting. Your role
 - If the discussion is non-technical (greetings, scheduling), simply summarize without forcing technical issues
 - Be specific with service names (e.g., "AWS Security Groups" not just "firewall")
 - Reference actual best practices and standards where applicable
+- **CRITICAL**: Pay special attention to segments marked as "⭐ HIGH PRIORITY" or user-flagged content
 """
 
 
@@ -74,7 +99,7 @@ class MeetingSummarizer:
     """
     Handles IT meeting analysis using Grok API.
     Focuses on proactive technical issue identification and suggestions.
-    Now supports configurable analysis intervals and on-demand analysis.
+    Now supports configurable analysis intervals, on-demand analysis, and focus detection.
     """
     
     def __init__(self, api_key_grok: str, words_per_analysis: int = DEFAULT_WORDS_PER_ANALYSIS):
@@ -114,15 +139,31 @@ class MeetingSummarizer:
         
         # Analysis counter
         self.analysis_count = 0
+        
+        # Focus detection - NEW FEATURE
+        self.focus_segments: List[Dict[str, str]] = []  # Store {timestamp, text, context}
+        self.focus_detected = False
     
     def set_words_per_analysis(self, words: int):
         """Update the automatic analysis threshold."""
         self.words_per_analysis = words
         print(f"Analysis threshold updated to {words} words")
     
+    def _detect_focus_request(self, text: str) -> bool:
+        """
+        Detect if the user is requesting focused analysis on this segment.
+        Returns True if focus keywords are detected.
+        """
+        text_lower = text.lower()
+        for trigger in FOCUS_TRIGGERS:
+            if trigger in text_lower:
+                return True
+        return False
+    
     def add_transcript(self, text: str, auto_analyze: bool = True) -> Optional[Dict]:
         """
         Add new transcript and analyze if threshold reached.
+        Also detects focus requests.
         
         Args:
             text: Transcript segment
@@ -134,6 +175,30 @@ class MeetingSummarizer:
         self.full_transcript.append(text)
         words = text.split()
         self.word_count += len(words)
+        
+        # Check for focus detection - NEW FEATURE
+        if self._detect_focus_request(text):
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            
+            # Get surrounding context (previous segment if exists)
+            context_segments = []
+            if len(self.full_transcript) >= 2:
+                context_segments.append(self.full_transcript[-2])
+            context_segments.append(text)
+            
+            # Get next segment when it arrives (will be added in subsequent calls)
+            context = " ".join(context_segments)
+            
+            self.focus_segments.append({
+                "timestamp": timestamp,
+                "text": text,
+                "context": context,
+                "word_count": self.word_count
+            })
+            self.focus_detected = True
+            
+            print(f"⭐ FOCUS REQUEST DETECTED at {timestamp}!")
+            print(f"   Segment: {text[:100]}...")
         
         # Only auto-analyze if enabled and threshold reached
         if auto_analyze and self.words_per_analysis > 0:
@@ -176,6 +241,7 @@ class MeetingSummarizer:
     def _analyze_current_state(self, is_comprehensive: bool = False) -> Dict:
         """
         Analyze current meeting state with IT focus.
+        Now includes focus segment detection and prioritization.
         
         Args:
             is_comprehensive: If True, includes ALL transcripts for manual analysis
@@ -198,7 +264,8 @@ class MeetingSummarizer:
 
 **COMPREHENSIVE ANALYSIS MODE:**
 This is a manual/on-demand analysis of ALL accumulated discussion. Provide:
-- Detailed technical analysis (4-6 sentences covering all major topics discussed)
+- Detailed technical analysis (6-8 sentences covering all major topics discussed)
+- Any user flagged focus points analyzed in depth
 - All significant issues identified throughout the conversation
 - Comprehensive recommendations for the entire discussion
 - Key clarifying questions for any ambiguous topics
@@ -254,6 +321,11 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
             self.previous_issues.extend(analysis.get("potential_issues", []))
             self.previous_recommendations.extend(analysis.get("recommendations", []))
             
+            # Reset focus flag after analysis
+            if self.focus_detected:
+                print("✅ Focus segments analyzed")
+                self.focus_detected = False
+            
             # Print token usage
             if hasattr(response, 'usage'):
                 print(f"💰 Tokens: {response.usage.total_tokens} "
@@ -300,6 +372,7 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
     def _build_context(self, is_comprehensive: bool = False) -> str:
         """
         Build context for Grok analysis.
+        NOW INCLUDES FOCUS SEGMENTS for prioritized analysis.
         
         Args:
             is_comprehensive: If True, includes ALL transcripts (for manual analysis)
@@ -315,7 +388,22 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
             f"- Analysis count: {self.analysis_count}\n"
             f"- Type: IT Technical Discussion\n"
             f"- Analysis mode: {'COMPREHENSIVE (Manual)' if is_comprehensive else 'INCREMENTAL (Automatic)'}\n"
+            f"- Focus requests detected: {len(self.focus_segments)}\n"
         )
+        
+        # ADD FOCUS SEGMENTS - NEW FEATURE
+        if self.focus_segments:
+            context_parts.append("\n" + "="*70)
+            context_parts.append("⭐ HIGH PRIORITY SEGMENTS (USER REQUESTED FOCUS)")
+            context_parts.append("="*70)
+            context_parts.append("\n**CRITICAL**: The user explicitly flagged these segments for detailed analysis.")
+            context_parts.append("Provide comprehensive coverage with extra depth on these topics.\n")
+            
+            for i, focus in enumerate(self.focus_segments[-5:], 1):  # Last 5 focus points
+                context_parts.append(f"\n🎯 FOCUS #{i} (at {focus['timestamp']}, ~{focus['word_count']} words):")
+                context_parts.append(f"Context: {focus['context']}\n")
+            
+            context_parts.append("="*70 + "\n")
         
         if self.previous_issues:
             context_parts.append(
@@ -390,14 +478,25 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
     
     def get_final_summary(self) -> Dict:
         """Generate comprehensive final IT analysis of entire meeting."""
-        print("🔍 Generating final IT analysis...")
+        print("📄 Generating final IT analysis...")
         
         context_parts = [
             f"MEETING COMPLETED - FINAL ANALYSIS\n"
             f"Duration: {(datetime.now() - self.start_time).seconds // 60} minutes\n"
             f"Total words: {self.word_count}\n"
             f"Total analyses performed: {self.analysis_count}\n"
+            f"Focus requests: {len(self.focus_segments)}\n"
         ]
+        
+        # Include all focus segments in final summary
+        if self.focus_segments:
+            context_parts.append("\n" + "="*70)
+            context_parts.append("ALL USER-FLAGGED FOCUS POINTS")
+            context_parts.append("="*70)
+            for i, focus in enumerate(self.focus_segments, 1):
+                context_parts.append(f"\nFocus #{i} ({focus['timestamp']}):")
+                context_parts.append(focus['context'])
+            context_parts.append("="*70 + "\n")
         
         if self.rolling_summaries:
             context_parts.append("\n--- MEETING PROGRESSION ---")
@@ -421,7 +520,8 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
                 messages=[
                     {
                         "role": "system",
-                        "content": SYSTEM_PROMPT + "\n\n**THIS IS THE FINAL SUMMARY.** Provide a comprehensive analysis of the ENTIRE meeting. Include all major technical issues discussed, all key recommendations, and all important decisions/action items."
+                        "content": SYSTEM_PROMPT + "\n\n**THIS IS THE FINAL SUMMARY.** Provide a comprehensive analysis of the ENTIRE meeting. Include all major technical issues discussed, "
+                        "all key recommendations, and all important decisions/action items. PAY SPECIAL ATTENTION to user-flagged focus segments."
                     },
                     {
                         "role": "user",
@@ -476,7 +576,8 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
             "transcript_segments": len(self.full_transcript),
             "issues_identified": len(self.previous_issues),
             "recommendations_given": len(self.previous_recommendations),
-            "analyses_performed": self.analysis_count
+            "analyses_performed": self.analysis_count,
+            "focus_segments": len(self.focus_segments)
         }
 
 
@@ -485,7 +586,7 @@ Be thorough - this is a strategic checkpoint, not just incremental feedback.
 # ============================================================================
 
 if __name__ == "__main__":
-    """Test with IT-specific scenarios."""
+    """Test with IT-specific scenarios including focus detection."""
     from dotenv import load_dotenv
     load_dotenv()
     
@@ -495,26 +596,26 @@ if __name__ == "__main__":
         exit(1)
     
     print("\n" + "="*70)
-    print("IT-FOCUSED SUMMARIZER TEST")
+    print("IT-FOCUSED SUMMARIZER TEST WITH FOCUS DETECTION")
     print("="*70)
     
     summarizer = MeetingSummarizer(api_key)
     
-    # Test scenario: Azure AKS deployment discussion
+    # Test scenario: Azure AKS deployment discussion with focus requests
     test_transcript = [
         "We're planning to deploy an AKS cluster in Azure for our microservices.",
         "The jump box will be set up on a separate subnet for security reasons.",
-        "We'll connect it via VNet peering to access the cluster.",
+        "Focus on this point - We'll connect it via VNet peering to access the cluster.",
         "For the database, we're thinking of using MongoDB on EC2 instances.",
         "We should open port 22 from any IP to make remote access easier during testing.",
         "The AKS cluster will have 3 nodes initially, all in the same availability zone.",
-        "We need to set up CI/CD pipeline with Jenkins on a t2.micro instance.",
+        "Important - We need to set up CI/CD pipeline with Jenkins on a t2.micro instance.",
         "Let's use admin credentials hardcoded in the application for now.",
         "Bob will handle the deployment by Friday.",
-        "We should also set up logging at some point."
+        "We should also set up logging at some point. Analyze this - what logging solution?"
     ]
     
-    print("\nSimulating IT meeting transcript...\n")
+    print("\nSimulating IT meeting transcript with focus detection...\n")
     
     for i, segment in enumerate(test_transcript):
         print(f"[{i+1}] {segment}")
@@ -532,7 +633,7 @@ if __name__ == "__main__":
     comprehensive = summarizer.force_analysis()
     
     print("="*70)
-    print("COMPREHENSIVE ANALYSIS (ALL TRANSCRIPTS)")
+    print("COMPREHENSIVE ANALYSIS (ALL TRANSCRIPTS + FOCUS POINTS)")
     print("="*70)
     print(json.dumps(comprehensive, indent=2))
     

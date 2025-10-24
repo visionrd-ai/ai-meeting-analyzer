@@ -35,7 +35,7 @@ CHUNK_DURATION_SECONDS = 2    # Process audio every 2 seconds (faster updates)
 OVERLAP_SECONDS = 0.5         # 0.5-second overlap (25% for better continuity)
 
 # Whisper model settings
-WHISPER_MODEL_SIZE = "small"    # Options: tiny, base, small, medium, large
+WHISPER_MODEL_SIZE = "base"    # Options: tiny, base, small, medium, large
                                # tiny = fastest, least accurate
                                # base = good balance (RECOMMENDED)
                                # small = more accurate, slower

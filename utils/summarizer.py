@@ -5,17 +5,13 @@ import json
 from datetime import datetime
 
 # ============================================================================
-# CONFIGURATION
+# CONFIGURATION - Now configurable via constructor
 # ============================================================================
 
-# Analysis triggers
-WORDS_PER_ANALYSIS = 50        # Analyze every 50 words for real-time feedback
-WORDS_PER_ROLLING_SUMMARY = 300  # Create rolling summary every ~2 min
-
-# Context management
-MAX_PRIOR_SUMMARY_WORDS = 1000  # Maximum words to keep in rolling context
-
-# Grok model
+# Default values
+DEFAULT_WORDS_PER_ANALYSIS = 200
+DEFAULT_WORDS_PER_ROLLING_SUMMARY = 300
+MAX_PRIOR_SUMMARY_WORDS = 1000
 GROK_MODEL = "grok-4-fast-reasoning"
 
 # ============================================================================
@@ -65,55 +61,6 @@ You are an expert IT consultant AI analyzing a live technical meeting. Your role
   ]
 }
 
-**EXAMPLES:**
-
-Example 1 - Azure AKS Subnet Issue:
-Input: "We're planning to deploy an AKS cluster in Azure. The jump box will be set up on a separate subnet for security reasons, and we'll connect it via peering."
-
-Output:
-{
-  "technical_analysis": "Discussing Azure AKS deployment with jump box on separate subnet using VNet peering.",
-  "potential_issues": [
-    "Jump box on different subnet from AKS can cause connectivity issues - firewall rules may block traffic and increase management latency",
-    "VNet peering adds complexity and potential points of failure for bastion access"
-  ],
-  "recommendations": [
-    "Deploy jump box in the same VNet/subnet as AKS cluster, use Network Security Groups (NSGs) for isolation instead of subnet separation",
-    "Consider Azure Bastion service for secure RDP/SSH without exposing public IPs",
-    "If peering is required, ensure proper route tables and NSG rules are configured for bidirectional traffic"
-  ],
-  "clarifying_questions": [
-    "Is the jump box intended as a bastion host for administrative access?",
-    "What is the current VNet/subnet CIDR design?",
-    "Are you planning to use private endpoints for AKS API server access?"
-  ],
-  "action_items": []
-}
-
-Example 2 - AWS EC2 Security Risk:
-Input: "For the new EC2 instances in AWS, we'll open port 22 for SSH from any IP to make remote access easier during testing."
-
-Output:
-{
-  "technical_analysis": "Planning to enable SSH access (port 22) from all IPs (0.0.0.0/0) for AWS EC2 instances during testing phase.",
-  "potential_issues": [
-    "Opening SSH to 0.0.0.0/0 exposes instances to brute-force attacks and unauthorized access",
-    "Violates principle of least privilege and most security compliance frameworks (PCI-DSS, SOC2, ISO27001)"
-  ],
-  "recommendations": [
-    "Restrict SSH access to specific IP ranges (office/VPN CIDR) via Security Groups",
-    "Use AWS Systems Manager (SSM) Session Manager for keyless, audited access instead of direct SSH",
-    "Enable MFA for IAM users who manage these instances",
-    "If testing requires temporary wide access, set up temporary security group rules with automatic expiration"
-  ],
-  "clarifying_questions": [
-    "What is the expected source IP range for legitimate SSH connections?",
-    "Is this a temporary testing setup or permanent infrastructure?",
-    "Have you considered AWS SSM Session Manager as an alternative to direct SSH?"
-  ],
-  "action_items": []
-}
-
 **IMPORTANT RULES:**
 - Only flag issues that are actually mentioned or implied in the transcript
 - Don't repeat issues/suggestions from previous analyses unless new context changes them
@@ -127,14 +74,24 @@ class MeetingSummarizer:
     """
     Handles IT meeting analysis using Grok API.
     Focuses on proactive technical issue identification and suggestions.
+    Now supports configurable analysis intervals and on-demand analysis.
     """
     
-    def __init__(self, api_key_grok: str):
-        """Initialize Grok API client."""
+    def __init__(self, api_key_grok: str, words_per_analysis: int = DEFAULT_WORDS_PER_ANALYSIS):
+        """
+        Initialize Grok API client.
+        
+        Args:
+            api_key_grok: xAI API key
+            words_per_analysis: Number of words before automatic analysis (0 = manual only)
+        """
         self.client = OpenAI(
             api_key=api_key_grok,
             base_url="https://api.x.ai/v1"
         )
+        
+        # Configurable analysis threshold
+        self.words_per_analysis = words_per_analysis
         
         # Transcript accumulation
         self.full_transcript: List[str] = []
@@ -154,35 +111,101 @@ class MeetingSummarizer:
         
         # Meeting metadata
         self.start_time = datetime.now()
+        
+        # Analysis counter
+        self.analysis_count = 0
     
-    def add_transcript(self, text: str) -> Optional[Dict]:
-        """Add new transcript and analyze if threshold reached."""
+    def set_words_per_analysis(self, words: int):
+        """Update the automatic analysis threshold."""
+        self.words_per_analysis = words
+        print(f"Analysis threshold updated to {words} words")
+    
+    def add_transcript(self, text: str, auto_analyze: bool = True) -> Optional[Dict]:
+        """
+        Add new transcript and analyze if threshold reached.
+        
+        Args:
+            text: Transcript segment
+            auto_analyze: Whether to trigger automatic analysis
+            
+        Returns:
+            Analysis dict if threshold reached, None otherwise
+        """
         self.full_transcript.append(text)
         words = text.split()
         self.word_count += len(words)
         
-        words_since_last_analysis = self.word_count - self.last_analysis_word_count
-        
-        if words_since_last_analysis >= WORDS_PER_ANALYSIS:
-            print(f"Analyzing IT discussion ({self.word_count} total words)...")
-            analysis = self._analyze_current_state()
-            self.last_analysis_word_count = self.word_count
-            return analysis
+        # Only auto-analyze if enabled and threshold reached
+        if auto_analyze and self.words_per_analysis > 0:
+            words_since_last_analysis = self.word_count - self.last_analysis_word_count
+            
+            if words_since_last_analysis >= self.words_per_analysis:
+                print(f"🔄 Auto-analyzing at {self.word_count} words...")
+                return self._perform_analysis(is_comprehensive=False)  # Incremental for automatic
         
         return None
     
-    def _analyze_current_state(self) -> Dict:
-        """Analyze current meeting state with IT focus."""
+    def force_analysis(self) -> Dict:
+        """
+        Force an immediate analysis regardless of word count.
+        Used for on-demand button clicks.
+        
+        Returns:
+            Analysis dict with comprehensive context
+        """
+        print(f"🎯 On-demand analysis triggered ({self.word_count} words)")
+        return self._perform_analysis(is_comprehensive=True)  # Pass flag for comprehensive analysis
+    
+    def _perform_analysis(self, is_comprehensive: bool = False) -> Dict:
+        """
+        Internal method to perform analysis.
+        
+        Args:
+            is_comprehensive: If True, includes ALL transcripts for thorough analysis
+        
+        Updates last analysis word count and returns results.
+        """
+        if self.word_count == 0:
+            return self._get_error_response("No transcript to analyze yet")
+        
+        analysis = self._analyze_current_state(is_comprehensive=is_comprehensive)
+        self.last_analysis_word_count = self.word_count
+        self.analysis_count += 1
+        return analysis
+    
+    def _analyze_current_state(self, is_comprehensive: bool = False) -> Dict:
+        """
+        Analyze current meeting state with IT focus.
+        
+        Args:
+            is_comprehensive: If True, includes ALL transcripts for manual analysis
+        """
         # Create rolling summary if needed
         words_since_last_summary = self.word_count - self.last_summary_word_count
         
-        if words_since_last_summary >= WORDS_PER_ROLLING_SUMMARY:
-            print("Creating rolling summary...")
+        if words_since_last_summary >= DEFAULT_WORDS_PER_ROLLING_SUMMARY:
+            print("📝 Creating rolling summary...")
             self._create_rolling_summary()
             self.last_summary_word_count = self.word_count
         
-        # Build context
-        context = self._build_context()
+        # Build context (comprehensive or incremental)
+        context = self._build_context(is_comprehensive=is_comprehensive)
+        
+        # Use different system prompt for comprehensive analysis
+        system_prompt = SYSTEM_PROMPT
+        if is_comprehensive:
+            system_prompt = SYSTEM_PROMPT + """
+
+**COMPREHENSIVE ANALYSIS MODE:**
+This is a manual/on-demand analysis of ALL accumulated discussion. Provide:
+- Detailed technical analysis (4-6 sentences covering all major topics discussed)
+- All significant issues identified throughout the conversation
+- Comprehensive recommendations for the entire discussion
+- Key clarifying questions for any ambiguous topics
+- All action items mentioned
+
+Be thorough - this is a strategic checkpoint, not just incremental feedback.
+"""
         
         # Call Grok API
         try:
@@ -191,7 +214,7 @@ class MeetingSummarizer:
                 messages=[
                     {
                         "role": "system",
-                        "content": SYSTEM_PROMPT
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
@@ -199,7 +222,7 @@ class MeetingSummarizer:
                     }
                 ],
                 temperature=0.3,
-                max_tokens=1500,
+                max_tokens=2000 if is_comprehensive else 1500,  # More tokens for comprehensive
                 response_format={"type": "json_object"}
             )
             
@@ -233,7 +256,7 @@ class MeetingSummarizer:
             
             # Print token usage
             if hasattr(response, 'usage'):
-                print(f"Tokens: {response.usage.total_tokens} "
+                print(f"💰 Tokens: {response.usage.total_tokens} "
                       f"(in: {response.usage.prompt_tokens}, "
                       f"out: {response.usage.completion_tokens})")
             
@@ -252,24 +275,20 @@ class MeetingSummarizer:
     
     def _deduplicate_analysis(self, analysis: Dict) -> Dict:
         """Remove duplicate issues/recommendations that were mentioned before."""
-        # Simple similarity check - exact or very similar text
         def is_duplicate(new_item: str, previous_items: List[str]) -> bool:
             new_lower = new_item.lower()
-            for prev in previous_items[-10:]:  # Check last 10 items only
+            for prev in previous_items[-10:]:
                 prev_lower = prev.lower()
-                # Check if items are very similar (simple approach)
                 if new_lower in prev_lower or prev_lower in new_lower:
                     return True
             return False
         
-        # Filter issues
         if "potential_issues" in analysis:
             analysis["potential_issues"] = [
                 issue for issue in analysis["potential_issues"]
                 if not is_duplicate(issue, self.previous_issues)
             ]
         
-        # Filter recommendations
         if "recommendations" in analysis:
             analysis["recommendations"] = [
                 rec for rec in analysis["recommendations"]
@@ -278,37 +297,59 @@ class MeetingSummarizer:
         
         return analysis
     
-    def _build_context(self) -> str:
-        """Build context for Grok analysis."""
+    def _build_context(self, is_comprehensive: bool = False) -> str:
+        """
+        Build context for Grok analysis.
+        
+        Args:
+            is_comprehensive: If True, includes ALL transcripts (for manual analysis)
+                            If False, only includes recent segments (for incremental analysis)
+        """
         context_parts = []
         
-        # Meeting metadata
         duration = (datetime.now() - self.start_time).seconds // 60
         context_parts.append(
             f"MEETING METADATA:\n"
             f"- Duration: {duration} minutes\n"
             f"- Total words: {self.word_count}\n"
+            f"- Analysis count: {self.analysis_count}\n"
             f"- Type: IT Technical Discussion\n"
+            f"- Analysis mode: {'COMPREHENSIVE (Manual)' if is_comprehensive else 'INCREMENTAL (Automatic)'}\n"
         )
         
-        # Add previous analyses summary (for deduplication context)
         if self.previous_issues:
             context_parts.append(
                 f"\n--- PREVIOUSLY IDENTIFIED ISSUES (DON'T REPEAT) ---\n" +
                 "\n".join(f"- {issue}" for issue in self.previous_issues[-5:])
             )
         
-        # Add rolling summaries
         if self.rolling_summaries:
             context_parts.append("\n--- PREVIOUS DISCUSSION (SUMMARIES) ---")
             for i, summary in enumerate(self.rolling_summaries):
                 context_parts.append(f"\nPhase {i+1}:\n{summary}")
         
-        # Add recent transcript (last 3 segments)
-        recent_segments = self.full_transcript[-3:]
-        if recent_segments:
-            context_parts.append("\n--- CURRENT DISCUSSION ---")
-            context_parts.append(" ".join(recent_segments))
+        # CRITICAL DIFFERENCE: How much transcript to include
+        if is_comprehensive:
+            # COMPREHENSIVE: Include ALL transcripts (for manual "Analyze Now")
+            full_text = " ".join(self.full_transcript)
+            words = full_text.split()
+            
+            # If too long, use last 800 words to stay within token limits
+            if len(words) > 800:
+                context_parts.append(f"\n--- FULL DISCUSSION (LAST 800 WORDS OF {len(words)} TOTAL) ---")
+                context_parts.append(" ".join(words[-800:]))
+            else:
+                context_parts.append(f"\n--- COMPLETE DISCUSSION ({len(words)} WORDS) ---")
+                context_parts.append(full_text)
+            
+            print(f"📊 Comprehensive analysis: {len(words)} total words, {min(len(words), 800)} sent to API")
+        else:
+            # INCREMENTAL: Only recent segments (for automatic periodic analysis)
+            recent_segments = self.full_transcript[-3:]
+            if recent_segments:
+                context_parts.append("\n--- CURRENT DISCUSSION (RECENT) ---")
+                context_parts.append(" ".join(recent_segments))
+                print(f"📊 Incremental analysis: Last 3 segments")
         
         return "\n".join(context_parts)
     
@@ -336,13 +377,11 @@ class MeetingSummarizer:
             summary = response.choices[0].message.content
             self.rolling_summaries.append(summary)
             
-            # Trim old summaries if too long
             total_summary_words = sum(len(s.split()) for s in self.rolling_summaries)
             
             while total_summary_words > MAX_PRIOR_SUMMARY_WORDS:
                 removed = self.rolling_summaries.pop(0)
                 total_summary_words -= len(removed.split())
-                print(f"Trimmed old summary")
             
             print(f"✓ Rolling summary created ({len(self.rolling_summaries)} total)")
             
@@ -351,21 +390,20 @@ class MeetingSummarizer:
     
     def get_final_summary(self) -> Dict:
         """Generate comprehensive final IT analysis of entire meeting."""
-        print("Generating final IT analysis...")
+        print("🔍 Generating final IT analysis...")
         
         context_parts = [
             f"MEETING COMPLETED - FINAL ANALYSIS\n"
             f"Duration: {(datetime.now() - self.start_time).seconds // 60} minutes\n"
             f"Total words: {self.word_count}\n"
+            f"Total analyses performed: {self.analysis_count}\n"
         ]
         
-        # Add all summaries
         if self.rolling_summaries:
             context_parts.append("\n--- MEETING PROGRESSION ---")
             for i, summary in enumerate(self.rolling_summaries):
                 context_parts.append(f"\nPhase {i+1}:\n{summary}")
         
-        # Add full transcript (or last 1000 words)
         full_text = " ".join(self.full_transcript)
         words = full_text.split()
         if len(words) > 1000:
@@ -375,7 +413,6 @@ class MeetingSummarizer:
             context_parts.append("\n--- FULL TRANSCRIPT ---")
         
         context_parts.append(full_text)
-        
         context = "\n".join(context_parts)
         
         try:
@@ -399,7 +436,6 @@ class MeetingSummarizer:
             response_text = response.choices[0].message.content
             analysis = json.loads(response_text)
             
-            # Ensure all keys exist
             required_keys = [
                 "technical_analysis",
                 "potential_issues",
@@ -439,7 +475,8 @@ class MeetingSummarizer:
             "summary_count": len(self.rolling_summaries),
             "transcript_segments": len(self.full_transcript),
             "issues_identified": len(self.previous_issues),
-            "recommendations_given": len(self.previous_recommendations)
+            "recommendations_given": len(self.previous_recommendations),
+            "analyses_performed": self.analysis_count
         }
 
 
@@ -454,7 +491,7 @@ if __name__ == "__main__":
     
     api_key = os.getenv("XAI_API_KEY")
     if not api_key:
-        print(" XAI_API_KEY not set")
+        print("❌ XAI_API_KEY not set")
         exit(1)
     
     print("\n" + "="*70)
@@ -485,13 +522,22 @@ if __name__ == "__main__":
         
         if analysis:
             print("\n" + "-"*70)
-            print("🔍 GROK IT ANALYSIS:")
+            print("📊 GROK IT ANALYSIS:")
             print("-"*70)
             print(json.dumps(analysis, indent=2))
             print("-"*70 + "\n")
     
+    # Test comprehensive analysis
+    print("\n🎯 TESTING COMPREHENSIVE ANALYSIS (force_analysis)...\n")
+    comprehensive = summarizer.force_analysis()
+    
+    print("="*70)
+    print("COMPREHENSIVE ANALYSIS (ALL TRANSCRIPTS)")
+    print("="*70)
+    print(json.dumps(comprehensive, indent=2))
+    
     # Final summary
-    print("\nGenerating final IT analysis...\n")
+    print("\n\nGenerating final IT analysis...\n")
     final = summarizer.get_final_summary()
     
     print("="*70)
@@ -502,7 +548,7 @@ if __name__ == "__main__":
     # Stats
     stats = summarizer.get_stats()
     print("\n" + "="*70)
-    print(" STATISTICS")
+    print("📊 STATISTICS")
     print("="*70)
     for key, value in stats.items():
         print(f"{key}: {value}")
