@@ -9,6 +9,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 from audio_processor_faster_whisper_meet import EnhancedAudioProcessor
 from summarizer import MeetingSummarizer
@@ -23,6 +24,18 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+# Initialize SocketIO for real-time updates with performance optimizations
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='threading',
+    ping_timeout=60,
+    ping_interval=25,
+    max_http_buffer_size=1000000,  # 1MB buffer for better performance
+    logger=False,  # Disable logging for better performance
+    engineio_logger=False
+)
 
 # Global application state
 app_state = {
@@ -40,6 +53,7 @@ app_state = {
     'is_analyzing': False,  # Track if analysis is in progress
     'analysis_start_time': None,  # Track when analysis started
     'audio_source': 'mic',  # 'mic', 'system', or 'both'
+    'transcription_engine': 'faster_whisper',  # 'faster_whisper' or 'assemblyai'
 }
 
 # ================================================================
@@ -131,12 +145,13 @@ def clear_storage():
 
 def on_new_transcript(text: str, source_label: str = "Mic"):
     """
-    Callback function for new transcript segments.
+    Callback function for new transcript segments with performance optimization.
     
     Args:
         text: Transcribed text
         source_label: "Mic" or "System" indicating audio source
     """
+    start_time = time.time()
     try:
         # Format transcript with source label for dual mode
         if app_state['audio_source'] == 'both':
@@ -147,7 +162,24 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
         segments = load_transcripts()
         segments.append(formatted_text)
         save_transcripts(segments)
-        print(f"[{source_label}] {text[:50]}...")
+        
+        # Calculate current metrics for real-time updates (optimized)
+        metrics = calculate_metrics()
+        
+        processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+        print(f"[{source_label}] {text[:50]}... (processed in {processing_time:.1f}ms)")
+        
+        # Emit real-time transcript update to all connected clients (optimized for speed)
+        socketio.emit('transcript_update', {
+            'new_text': formatted_text,
+            'full_text': metrics['full_text'],
+            'word_count': metrics['word_count'],
+            'segments_count': metrics['segments_count'],
+            'duration': metrics['duration'],
+            'wpm': metrics['wpm'],
+            'source_label': source_label,
+            'timestamp': datetime.now().strftime("%H:%M:%S")
+        })  # Remove broadcast parameter for compatibility
         
         # Trigger live analysis update (only for automatic mode)
         if app_state['is_recording'] and app_state['summarizer'] and app_state['analysis_mode'] == 'automatic':
@@ -156,7 +188,14 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
                 analysis = app_state['summarizer'].add_transcript(text, auto_analyze=True)
                 if analysis:
                     app_state['current_analysis'] = analysis
-                    print(" Automatic analysis updated")
+                    print("✅ Automatic analysis updated")
+                    
+                    # Emit real-time analysis update (optimized for speed)
+                    socketio.emit('analysis_update', {
+                        'analysis': analysis,
+                        'is_final': False,
+                        'timestamp': datetime.now().strftime("%H:%M:%S")
+                    })
             except Exception as e:
                 print(f"Error updating live analysis: {e}")
         elif app_state['is_recording'] and app_state['summarizer']:
@@ -172,7 +211,7 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
         import traceback
         traceback.print_exc()
 
-def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
+def start_recording(mode='automatic', words_threshold=200, audio_source='mic', transcription_engine='faster_whisper'):
     """
     Start the recording session with audio processing and AI analysis.
     
@@ -180,6 +219,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
         mode: 'automatic' or 'manual' analysis mode
         words_threshold: Word count threshold for automatic analysis
         audio_source: 'mic', 'system', or 'both'
+        transcription_engine: 'faster_whisper' or 'assemblyai'
     """
     xai_key = os.getenv("XAI_API_KEY")
     if not xai_key:
@@ -195,6 +235,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
         app_state['analysis_mode'] = mode
         app_state['words_threshold'] = words_threshold
         app_state['audio_source'] = audio_source
+        app_state['transcription_engine'] = transcription_engine
         
         # Initialize AI components with appropriate settings
         print(f"Initializing AI components in {mode} mode with {audio_source} audio source...")
@@ -208,10 +249,11 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
             app_state['summarizer'] = MeetingSummarizer(xai_key, words_per_analysis=0)
             print(f"âœ“ Manual mode: on-demand analysis only")
         
-        print("Initializing audio processor...")
+        print(f"Initializing audio processor with {transcription_engine.upper()}...")
         app_state['audio_processor'] = EnhancedAudioProcessor(
             on_new_transcript,
-            audio_source=audio_source
+            audio_source=audio_source,
+            transcription_engine=transcription_engine
         )
         
         # Set session metadata
@@ -226,7 +268,8 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
             'xai_model': 'grok-4-fast-reasoning',
             'analysis_mode': mode,
             'words_threshold': words_threshold,
-            'audio_source': audio_source
+            'audio_source': audio_source,
+            'transcription_engine': transcription_engine
         }
         save_metadata(metadata)
         
@@ -251,7 +294,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic'):
         print("âœ“ Recording started successfully!")
         return {
             "success": True, 
-            "message": f"Recording started in {mode.upper()} mode ({mode_desc})!"
+            "message": f"Recording started with {transcription_engine.replace('_', '-').title()} in {mode.upper()} mode ({mode_desc})!"
         }
         
     except Exception as e:
@@ -273,6 +316,16 @@ def stop_recording():
         # Mark as analyzing
         app_state['is_analyzing'] = True
         app_state['analysis_start_time'] = datetime.now()
+        
+        # Emit recording stopped event
+        socketio.emit('recording_stopped', {
+            'timestamp': datetime.now().strftime("%H:%M:%S")
+        })
+        
+        # Emit final analysis start event
+        socketio.emit('final_analysis_start', {
+            'timestamp': datetime.now().strftime("%H:%M:%S")
+        })
         
         # Allow time for final processing
         time.sleep(2)
@@ -297,7 +350,14 @@ def stop_recording():
                     for segment in segments:
                         fresh_summarizer.add_transcript(segment, auto_analyze=False)
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
-                    print("Final summary generated")
+                    print("✅ Final summary generated")
+                    
+                    # Emit final analysis complete event
+                    socketio.emit('final_analysis_complete', {
+                        'analysis': app_state['final_summary'],
+                        'is_final': True,
+                        'timestamp': datetime.now().strftime("%H:%M:%S")
+                    })
                 else:
                     print("No API key for final summary")
             except Exception as e:
@@ -309,6 +369,12 @@ def stop_recording():
                 app_state['is_recording'] = False
                 app_state['total_meetings_analyzed'] += 1
                 save_app_stats()
+                
+                # Emit session complete event
+                socketio.emit('session_complete', {
+                    'timestamp': datetime.now().strftime("%H:%M:%S"),
+                    'total_meetings_analyzed': app_state['total_meetings_analyzed']
+                })
         
         # Start analysis in background
         thread = threading.Thread(target=generate_final_analysis, daemon=True)
@@ -360,26 +426,45 @@ def trigger_manual_analysis():
     app_state['is_analyzing'] = True
     app_state['analysis_start_time'] = datetime.now()
     
+    # Emit analysis start event
+    socketio.emit('analysis_start', {
+        'word_count': word_count,
+        'timestamp': datetime.now().strftime("%H:%M:%S")
+    })
+    
     # Perform analysis in background thread
     def perform_analysis():
         try:
-            print(f"ðŸŽ¯ Manual analysis triggered ({word_count} words)")
+            print(f"🎯 Manual analysis triggered ({word_count} words)")
             start_time = time.time()
             
             # Use force_analysis which is optimized for comprehensive analysis
             analysis = app_state['summarizer'].force_analysis()
             
             elapsed = time.time() - start_time
-            print(f" Manual analysis complete in {elapsed:.2f} seconds")
+            print(f"✅ Manual analysis complete in {elapsed:.2f} seconds")
             
             if analysis:
                 app_state['current_analysis'] = analysis
+                
+                # Emit analysis complete event
+                socketio.emit('analysis_complete', {
+                    'analysis': analysis,
+                    'is_final': False,
+                    'generation_time': elapsed,
+                    'timestamp': datetime.now().strftime("%H:%M:%S")
+                })
         except Exception as e:
             print(f"Error in manual analysis: {e}")
             import traceback
             traceback.print_exc()
         finally:
             app_state['is_analyzing'] = False
+            
+            # Emit analysis end event
+            socketio.emit('analysis_end', {
+                'timestamp': datetime.now().strftime("%H:%M:%S")
+            })
     
     thread = threading.Thread(target=perform_analysis, daemon=True)
     thread.start()
@@ -440,7 +525,7 @@ def calculate_metrics():
 
 @app.route('/')
 def index():
-    """Main application dashboard - Live Transcript page."""
+    """Page 1: Configuration & Recording Controls."""
     # Calculate current metrics
     metrics = calculate_metrics()
     
@@ -467,11 +552,42 @@ def index():
         **metrics
     }
     
-    return render_template('index_obaid_rep_meet.html', **template_data)
+    return render_template('page1_config_controls.html', **template_data)
+
+@app.route('/transcript')
+def transcript():
+    """Page 2: Live Transcript."""
+    # Calculate current metrics
+    metrics = calculate_metrics()
+    
+    # Determine status
+    status_text = "READY TO RECORD"
+    status_color = "#10B981"
+    if app_state['is_recording']:
+        mode_text = f"({app_state['analysis_mode'].upper()} MODE)"
+        status_text = f"RECORDING IN PROGRESS {mode_text}"
+        status_color = "#EF4444"
+    
+    # Prepare template data
+    template_data = {
+        'is_recording': app_state['is_recording'],
+        'status_text': status_text,
+        'status_color': status_color,
+        'session_id': app_state['recording_session_id'],
+        'total_sessions': app_state['total_sessions'],
+        'total_meetings_analyzed': app_state['total_meetings_analyzed'],
+        'analysis_mode': app_state['analysis_mode'],
+        'words_threshold': app_state['words_threshold'],
+        'is_analyzing': app_state['is_analyzing'],
+        'audio_source': app_state['audio_source'],
+        **metrics
+    }
+    
+    return render_template('page2_live_transcript.html', **template_data)
 
 @app.route('/analysis')
 def analysis():
-    """AI Analysis page."""
+    """Page 3: AI Analysis."""
     # Calculate current metrics
     metrics = calculate_metrics()
     
@@ -500,7 +616,7 @@ def analysis():
         **metrics
     }
     
-    return render_template('analysis.html', **template_data)
+    return render_template('page3_ai_analysis.html', **template_data)
 
 @app.route('/old')
 def old_interface():
@@ -538,13 +654,19 @@ def old_interface():
 @app.route('/start_recording', methods=['POST'])
 def start_recording_route():
     """API endpoint to start recording."""
-    # Get mode, threshold, and audio source from request
+    # Get mode, threshold, audio source, and transcription engine from request
     data = request.get_json() or {}
     mode = data.get('mode', 'automatic')
     words_threshold = data.get('words_threshold', 200)
     audio_source = data.get('audio_source', 'mic')
+    transcription_engine = data.get('transcription_engine', 'faster_whisper')
     
-    result = start_recording(mode=mode, words_threshold=words_threshold, audio_source=audio_source)
+    result = start_recording(
+        mode=mode, 
+        words_threshold=words_threshold, 
+        audio_source=audio_source,
+        transcription_engine=transcription_engine
+    )
     return jsonify(result)
 
 @app.route('/stop_recording', methods=['POST'])
@@ -665,14 +787,60 @@ def initialize_app():
 # MAIN APPLICATION ENTRY POINT
 # ================================================================
 
+# ================================================================
+# SOCKETIO EVENT HANDLERS
+# ================================================================
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    print(f"🔗 Client connected: {request.sid}")
+    
+    # Send current status to newly connected client
+    metrics = calculate_metrics()
+    emit('status_update', {
+        'is_recording': app_state['is_recording'],
+        'is_analyzing': app_state['is_analyzing'],
+        'session_id': app_state['recording_session_id'],
+        'analysis_mode': app_state['analysis_mode'],
+        'audio_source': app_state['audio_source'],
+        **metrics
+    })
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    print(f"❌ Client disconnected: {request.sid}")
+
+@socketio.on('request_status')
+def handle_status_request():
+    """Handle status request from client."""
+    metrics = calculate_metrics()
+    emit('status_update', {
+        'is_recording': app_state['is_recording'],
+        'is_analyzing': app_state['is_analyzing'],
+        'session_id': app_state['recording_session_id'],
+        'analysis_mode': app_state['analysis_mode'],
+        'audio_source': app_state['audio_source'],
+        'current_analysis': app_state['current_analysis'],
+        'final_summary': app_state['final_summary'],
+        **metrics
+    })
+
+# ================================================================
+# MAIN APPLICATION ENTRY POINT
+# ================================================================
+
 if __name__ == '__main__':
     # Initialize the application
     initialize_app()
     
-    # Run the Flask development server
-    app.run(
+    # Run the SocketIO server
+    print("🚀 Starting SocketIO server...")
+    socketio.run(
+        app,
         debug=True,
         host='0.0.0.0',
         port=5000,
-        threaded=True
+        allow_unsafe_werkzeug=True
     )

@@ -23,32 +23,197 @@ import time
 from typing import Callable, Optional, Literal
 import soundcard as sc
 from datetime import datetime
+import scipy.signal
+from scipy.signal import butter, filtfilt, wiener
+import noisereduce as nr
+import assemblyai as aai
+import tempfile
+import wave
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-# Audio recording settings
-CHUNK_SIZE = 8192
+# Audio recording settings - Optimized for speed and quality
+CHUNK_SIZE = 4096  # Reduced for lower latency
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
 
-# Transcription settings
-CHUNK_DURATION_SECONDS = 2
-OVERLAP_SECONDS = 0.5
+# Transcription settings - Optimized for real-time performance
+CHUNK_DURATION_SECONDS = 1.5  # Reduced for faster processing
+OVERLAP_SECONDS = 0.3  # Reduced overlap for speed
 
-# Whisper model settings
-WHISPER_MODEL_SIZE = "base" # Options: tiny, base, small, medium, large
-                               # tiny = fastest, least accurate
-                               # base = good balance (RECOMMENDED)
-                               # small = more accurate, slower
-                               # medium/large = very accurate, very slow
-DEVICE = "cpu" # if available, use GPU
-COMPUTE_TYPE = "int8" # int8 = faster, float16 = more accurate (needs GPU)
+# Whisper model settings - Optimized for speed
+WHISPER_MODEL_SIZE = "base"  # Changed to tiny for maximum speed
+DEVICE = "cpu"  # Use GPU if available for better performance
+COMPUTE_TYPE = "int8"  # Fastest computation type
+
+# Noise cancellation settings
+NOISE_REDUCTION_ENABLED = True
+VOICE_ACTIVITY_DETECTION = True
+HIGH_PASS_FILTER_ENABLED = True
+ADAPTIVE_NOISE_GATE = True
+
+# Voice frequency range (human speech is typically 85-255 Hz fundamental, 300-3400 Hz total)
+VOICE_LOW_FREQ = 300   # Hz - Remove low frequency noise
+VOICE_HIGH_FREQ = 3400 # Hz - Remove high frequency noise
+NOISE_GATE_THRESHOLD = 0.02  # Amplitude threshold for voice activity
 
 # Audio source types
 AudioSourceType = Literal["mic", "system", "both"]
+
+# Transcription engine types
+TranscriptionEngine = Literal["faster_whisper", "assemblyai"]
+
+# AssemblyAI configuration
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
+if ASSEMBLYAI_API_KEY:
+    aai.settings.api_key = ASSEMBLYAI_API_KEY
+
+# ============================================================================
+# AUDIO PROCESSING FUNCTIONS
+# ============================================================================
+
+def apply_noise_cancellation(audio_data: np.ndarray, sample_rate: int = RATE) -> np.ndarray:
+    """
+    Apply advanced noise cancellation to audio data.
+    
+    Args:
+        audio_data: Raw audio data as numpy array
+        sample_rate: Sample rate of the audio
+    
+    Returns:
+        Cleaned audio data
+    """
+    try:
+        # Convert to float for processing
+        audio_float = audio_data.astype(np.float32)
+        
+        # 1. High-pass filter to remove low-frequency noise (AC hum, rumble)
+        if HIGH_PASS_FILTER_ENABLED:
+            nyquist = sample_rate * 0.5
+            low_cutoff = VOICE_LOW_FREQ / nyquist
+            b, a = butter(4, low_cutoff, btype='high')
+            audio_float = filtfilt(b, a, audio_float)
+        
+        # 2. Band-pass filter for human voice range
+        nyquist = sample_rate * 0.5
+        low = VOICE_LOW_FREQ / nyquist
+        high = min(VOICE_HIGH_FREQ / nyquist, 0.99)  # Ensure it's below Nyquist
+        b, a = butter(4, [low, high], btype='band')
+        audio_float = filtfilt(b, a, audio_float)
+        
+        # 3. Spectral noise reduction
+        if NOISE_REDUCTION_ENABLED and len(audio_float) > 1024:
+            # Use noisereduce library for spectral subtraction
+            audio_float = nr.reduce_noise(
+                y=audio_float, 
+                sr=sample_rate,
+                stationary=False,  # Non-stationary noise reduction
+                prop_decrease=0.8  # Aggressive noise reduction
+            )
+        
+        # 4. Adaptive noise gate
+        if ADAPTIVE_NOISE_GATE:
+            # Calculate RMS energy
+            rms = np.sqrt(np.mean(audio_float**2))
+            if rms < NOISE_GATE_THRESHOLD:
+                audio_float *= 0.1  # Heavily attenuate low-energy segments
+        
+        # 5. Normalize audio to prevent clipping
+        max_val = np.max(np.abs(audio_float))
+        if max_val > 0:
+            audio_float = audio_float / max_val * 0.8
+        
+        # Ensure output is float32
+        return audio_float.astype(np.float32)
+        
+    except Exception as e:
+        print(f"Error in noise cancellation: {e}")
+        # Fallback to basic normalization
+        try:
+            audio_float = audio_data.astype(np.float32)
+            if np.max(np.abs(audio_float)) > 0:
+                audio_float = audio_float / np.max(np.abs(audio_float)) * 0.8
+            return audio_float
+        except:
+            return audio_data.astype(np.float32)
+
+def detect_voice_activity(audio_data: np.ndarray, threshold: float = NOISE_GATE_THRESHOLD) -> bool:
+    """
+    Simple voice activity detection based on energy and spectral characteristics.
+    
+    Args:
+        audio_data: Audio data as numpy array
+        threshold: Energy threshold for voice detection
+    
+    Returns:
+        True if voice is detected, False otherwise
+    """
+    try:
+        # Calculate RMS energy
+        rms = np.sqrt(np.mean(audio_data**2))
+        
+        # Calculate spectral centroid (brightness indicator)
+        fft = np.fft.rfft(audio_data)
+        magnitude = np.abs(fft)
+        freqs = np.fft.rfftfreq(len(audio_data), 1/RATE)
+        
+        if np.sum(magnitude) > 0:
+            spectral_centroid = np.sum(freqs * magnitude) / np.sum(magnitude)
+            
+            # Voice typically has spectral centroid in 500-2000 Hz range
+            voice_like = (spectral_centroid > 500) and (spectral_centroid < 2000)
+            energy_sufficient = rms > threshold
+            
+            return voice_like and energy_sufficient
+        
+        return False
+        
+    except Exception as e:
+        print(f"Error in voice activity detection: {e}")
+        return True  # Default to processing if detection fails
+
+def optimize_audio_for_speech(audio_data: np.ndarray) -> np.ndarray:
+    """
+    Optimize audio specifically for speech recognition.
+    
+    Args:
+        audio_data: Raw audio data
+    
+    Returns:
+        Optimized audio data
+    """
+    try:
+        # Apply noise cancellation
+        cleaned_audio = apply_noise_cancellation(audio_data)
+        
+        # Apply dynamic range compression for consistent levels
+        # This helps with varying microphone distances
+        compressed_audio = np.tanh(cleaned_audio * 2.0) * 0.8
+        
+        # Pre-emphasis filter to boost high frequencies (improves speech clarity)
+        pre_emphasis = 0.97
+        emphasized_audio = np.append(compressed_audio[0], compressed_audio[1:] - pre_emphasis * compressed_audio[:-1])
+        
+        # Ensure output is float32
+        return emphasized_audio.astype(np.float32)
+        
+    except Exception as e:
+        print(f"Error in speech optimization: {e}")
+        # Fallback to basic normalization
+        try:
+            audio_float = audio_data.astype(np.float32)
+            if np.max(np.abs(audio_float)) > 0:
+                audio_float = audio_float / np.max(np.abs(audio_float)) * 0.8
+            return audio_float
+        except:
+            return audio_data.astype(np.float32)
 
 # ============================================================================
 
@@ -59,12 +224,14 @@ class EnhancedAudioProcessor:
     - Microphone capture (PyAudio)
     - System audio loopback (soundcard - WASAPI)
     - Dual capture mode (both sources separately)
+    - Multiple transcription engines (Faster-Whisper, AssemblyAI)
     """
     
     def __init__(
         self, 
         on_transcript: Callable[[str, str], None],  # (text, source_label)
-        audio_source: AudioSourceType = "mic"
+        audio_source: AudioSourceType = "mic",
+        transcription_engine: TranscriptionEngine = "faster_whisper"
     ):
         """
         Initialize audio processor.
@@ -72,8 +239,10 @@ class EnhancedAudioProcessor:
         Args:
             on_transcript: Callback(text, source_label) where source_label is "Mic" or "System"
             audio_source: "mic", "system", or "both"
+            transcription_engine: "faster_whisper" or "assemblyai"
         """
         self.audio_source = audio_source
+        self.transcription_engine = transcription_engine
         self.transcript_callback = on_transcript
         
         # PyAudio for microphone
@@ -99,14 +268,39 @@ class EnhancedAudioProcessor:
         self.system_processing_thread: Optional[threading.Thread] = None
         self.system_capture_thread: Optional[threading.Thread] = None
         
-        # Initialize Whisper model
-        print("Loading Whisper model... (10-30 seconds)")
-        self.whisper_model = WhisperModel(
-            WHISPER_MODEL_SIZE,
-            device=DEVICE,
-            compute_type=COMPUTE_TYPE
-        )
-        print("✓ Whisper model loaded")
+        # Initialize transcription engine
+        self.whisper_model = None
+        self.assemblyai_transcriber = None
+        
+        if self.transcription_engine == "faster_whisper":
+            print("Loading optimized Faster-Whisper model for real-time processing...")
+            self.whisper_model = WhisperModel(
+                WHISPER_MODEL_SIZE,
+                device=DEVICE,
+                compute_type=COMPUTE_TYPE,
+                cpu_threads=4,  # Optimize CPU usage
+                num_workers=1   # Single worker for lower latency
+            )
+            print("✓ Faster-Whisper model loaded for real-time performance")
+        
+        elif self.transcription_engine == "assemblyai":
+            if not ASSEMBLYAI_API_KEY:
+                raise ValueError("AssemblyAI API key not found. Please set ASSEMBLYAI_API_KEY in .env file")
+            
+            print("Initializing AssemblyAI transcriber...")
+            print(f"API Key loaded: {ASSEMBLYAI_API_KEY[:10]}...{ASSEMBLYAI_API_KEY[-4:]}")
+            
+            # Configure AssemblyAI for real-time transcription
+            config = aai.TranscriptionConfig(
+                language_detection=True,
+                punctuate=True,
+                format_text=True,
+                filter_profanity=False,
+                redact_pii=False,
+                speaker_labels=False
+            )
+            self.assemblyai_transcriber = aai.Transcriber(config=config)
+            print("✓ AssemblyAI transcriber initialized successfully")
         
         # Validate audio source availability
         self._validate_audio_sources()
@@ -405,21 +599,29 @@ class EnhancedAudioProcessor:
             traceback.print_exc()
     
     def _mic_processing_loop(self):
-        """Process microphone audio queue."""
-        print("Mic processing loop started")
+        """Process microphone audio queue with optimized real-time performance."""
+        print("Optimized mic processing loop started")
         
         while self.is_recording:
             try:
-                audio_data = self.mic_queue.get(timeout=0.5)
+                # Reduced timeout for faster response
+                audio_data = self.mic_queue.get(timeout=0.1)
                 audio_np = np.frombuffer(audio_data, dtype=np.int16)
                 
                 self.mic_buffer.extend(audio_np)
                 self.mic_buffer_duration += len(audio_np) / RATE
                 
+                # Process in smaller chunks for lower latency
                 if self.mic_buffer_duration >= CHUNK_DURATION_SECONDS:
-                    self._transcribe_buffer(self.mic_buffer, "Mic")
+                    # Process in background thread to avoid blocking
+                    buffer_copy = self.mic_buffer.copy()
+                    threading.Thread(
+                        target=self._transcribe_buffer, 
+                        args=(buffer_copy, "Mic"),
+                        daemon=True
+                    ).start()
                     
-                    # Keep overlap
+                    # Keep overlap for continuity
                     overlap_samples = int(OVERLAP_SECONDS * RATE)
                     if len(self.mic_buffer) > overlap_samples:
                         self.mic_buffer = self.mic_buffer[-overlap_samples:]
@@ -434,21 +636,29 @@ class EnhancedAudioProcessor:
                 print(f"Mic processing error: {e}")
     
     def _system_processing_loop(self):
-        """Process system audio queue."""
-        print("System processing loop started")
+        """Process system audio queue with optimized real-time performance."""
+        print("Optimized system processing loop started")
         
         while self.is_recording:
             try:
-                audio_data = self.system_queue.get(timeout=0.5)
+                # Reduced timeout for faster response
+                audio_data = self.system_queue.get(timeout=0.1)
                 audio_np = np.frombuffer(audio_data, dtype=np.int16)
                 
                 self.system_buffer.extend(audio_np)
                 self.system_buffer_duration += len(audio_np) / RATE
                 
+                # Process in smaller chunks for lower latency
                 if self.system_buffer_duration >= CHUNK_DURATION_SECONDS:
-                    self._transcribe_buffer(self.system_buffer, "System")
+                    # Process in background thread to avoid blocking
+                    buffer_copy = self.system_buffer.copy()
+                    threading.Thread(
+                        target=self._transcribe_buffer, 
+                        args=(buffer_copy, "System"),
+                        daemon=True
+                    ).start()
                     
-                    # Keep overlap
+                    # Keep overlap for continuity
                     overlap_samples = int(OVERLAP_SECONDS * RATE)
                     if len(self.system_buffer) > overlap_samples:
                         self.system_buffer = self.system_buffer[-overlap_samples:]
@@ -463,19 +673,73 @@ class EnhancedAudioProcessor:
                 print(f"System processing error: {e}")
     
     def _transcribe_buffer(self, buffer: list, source_label: str):
-        """Transcribe audio buffer with Whisper."""
+        """Transcribe audio buffer with selected engine and advanced noise cancellation."""
         try:
             # Convert to float32 and normalize
             audio_np = np.array(buffer, dtype=np.float32)
             audio_np = audio_np / 32768.0
             
-            # Transcribe
+            # Apply voice activity detection
+            try:
+                if VOICE_ACTIVITY_DETECTION and not detect_voice_activity(audio_np):
+                    return  # Skip processing if no voice detected
+            except Exception as e:
+                print(f"Voice activity detection error: {e}")
+                # Continue processing if VAD fails
+            
+            # Apply advanced noise cancellation and speech optimization
+            try:
+                audio_np = optimize_audio_for_speech(audio_np)
+            except Exception as e:
+                print(f"Audio optimization error: {e}")
+                # Fallback to basic normalization
+                audio_np = audio_np.astype(np.float32)
+                if np.max(np.abs(audio_np)) > 1.0:
+                    audio_np = audio_np / np.max(np.abs(audio_np))
+            
+            # Transcribe based on selected engine
+            if self.transcription_engine == "faster_whisper":
+                transcript_text = self._transcribe_with_whisper(audio_np)
+            elif self.transcription_engine == "assemblyai":
+                transcript_text = self._transcribe_with_assemblyai(audio_np)
+            else:
+                print(f"Unknown transcription engine: {self.transcription_engine}")
+                return
+            
+            if transcript_text:
+                # Add timestamp and source label
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                print(f"[{timestamp}] [{source_label}] [{self.transcription_engine.upper()}] {transcript_text}")
+                
+                # Call callback with source label
+                self.transcript_callback(transcript_text, source_label)
+            
+        except Exception as e:
+            print(f"Transcription error: {e}")
+    
+    def _transcribe_with_whisper(self, audio_np: np.ndarray) -> str:
+        """Transcribe using Faster-Whisper."""
+        try:
+            # Ensure audio is float32 for ONNX compatibility
+            if audio_np.dtype != np.float32:
+                audio_np = audio_np.astype(np.float32)
+            
+            # Ensure audio is in the correct range [-1, 1]
+            if np.max(np.abs(audio_np)) > 1.0:
+                audio_np = audio_np / np.max(np.abs(audio_np))
+            
             segments, info = self.whisper_model.transcribe(
                 audio_np,
-                beam_size=5,
+                beam_size=1,  # Reduced beam size for speed
                 language="en",
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500)
+                vad_parameters=dict(
+                    min_silence_duration_ms=300,  # Reduced for faster response
+                    speech_pad_ms=200  # Reduced padding
+                ),
+                no_speech_threshold=0.3,  # Lower threshold for better detection
+                compression_ratio_threshold=2.4,  # Optimized for speech
+                temperature=0.0  # Deterministic output for consistency
             )
             
             # Combine segments
@@ -483,18 +747,44 @@ class EnhancedAudioProcessor:
             for segment in segments:
                 transcript_text += segment.text + " "
             
-            transcript_text = transcript_text.strip()
-            
-            if transcript_text:
-                # Add timestamp and source label
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                print(f"[{timestamp}] [{source_label}] {transcript_text}")
-                
-                # Call callback with source label
-                self.transcript_callback(transcript_text, source_label)
+            return transcript_text.strip()
             
         except Exception as e:
-            print(f"Transcription error: {e}")
+            print(f"Faster-Whisper transcription error: {e}")
+            return ""
+    
+    def _transcribe_with_assemblyai(self, audio_np: np.ndarray) -> str:
+        """Transcribe using AssemblyAI."""
+        try:
+            # Convert float32 audio to int16 for WAV file
+            audio_int16 = (audio_np * 32767).astype(np.int16)
+            
+            # Create temporary WAV file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+                temp_filename = temp_file.name
+                
+                # Write WAV file
+                with wave.open(temp_filename, 'wb') as wav_file:
+                    wav_file.setnchannels(CHANNELS)
+                    wav_file.setsampwidth(2)  # 2 bytes for int16
+                    wav_file.setframerate(RATE)
+                    wav_file.writeframes(audio_int16.tobytes())
+            
+            # Transcribe with AssemblyAI
+            transcript = self.assemblyai_transcriber.transcribe(temp_filename)
+            
+            # Clean up temporary file
+            os.unlink(temp_filename)
+            
+            if transcript.status == aai.TranscriptStatus.completed:
+                return transcript.text or ""
+            else:
+                print(f"AssemblyAI transcription failed: {transcript.status}")
+                return ""
+                
+        except Exception as e:
+            print(f"AssemblyAI transcription error: {e}")
+            return ""
     
     def stop_recording(self):
         """Stop all recording streams."""

@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎙️ Live Transcript - AI Meeting Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-secondary: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(31, 41, 55, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-header {
+            background: var(--gradient-primary);
+            color: white;
+            text-align: center;
+            padding: 2rem 2rem;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            font-size: 0.95rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            margin-top: 1.5rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        .navigation-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .nav-link.current {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .transcript-cleaning-control {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #FFF9E6, #FFF3CD);
+            border-radius: 12px;
+            border: 2px solid var(--accent);
+        }
+
+        .transcript-cleaning-control label {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .transcript-cleaning-control input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .transcript-cleaning-control .help-text {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.5rem;
+            margin-bottom: 0;
+            line-height: 1.4;
+        }
+
+        .cleaned-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 0.75rem;
+            background: #D1FAE5;
+            color: #065F46;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            border-left: 4px solid var(--success);
+        }
+
+        .transcript-container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            box-shadow: var(--shadow-md);
+        }
+
+        .transcript-meta {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .transcript-stats {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-weight: 600;
+        }
+
+        .content-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-light);
+        }
+
+        .content-card h3 {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .recording-status {
+            background: var(--gradient-primary);
+            color: white;
+            text-align: center;
+            padding: 1.5rem 2rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 1.25rem;
+            animation: recordingPulse 2s infinite;
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4);
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .recording-status::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes recordingPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.02); }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        @keyframes recordingBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+        }
+
+        .metric-card:nth-child(2)::before { background: var(--gradient-accent); }
+        .metric-card:nth-child(3)::before { background: var(--gradient-secondary); }
+        .metric-card:nth-child(4)::before { background: linear-gradient(135deg, var(--success), #059669); }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--text-primary);
+            margin: 0.5rem 0;
+            line-height: 1;
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .auto-scroll-toggle {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .auto-scroll-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .auto-scroll-toggle.disabled {
+            background: var(--gradient-secondary);
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .app-header { padding: 2rem 1rem; }
+            .app-header h1 { font-size: 1.5rem; }
+            .navigation-links { flex-direction: column; align-items: center; }
+            .transcript-meta { flex-direction: column; align-items: flex-start; }
+            .transcript-stats { justify-content: center; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="app-header">
+            <h1>🎙️ Live Transcript</h1>
+            <p class="subtitle">Real-time speech-to-text transcription with intelligent cleaning</p>
+            <div class="status-indicator" style="background-color: {{ status_color }}20; color: {{ status_color }};">
+                <div style="width: 8px; height: 8px; background: {{ status_color }}; border-radius: 50%;"></div>
+                {{ status_text }}
+            </div>
+            {% if session_id %}
+            <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.9; font-weight: 500;">
+                Session ID: {{ session_id }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Navigation Links -->
+        <div class="navigation-links">
+            <a href="/" class="nav-link">
+                ⚙️ Configuration & Controls
+            </a>
+            <a href="/transcript" class="nav-link current">
+                🎙️ Live Transcript
+            </a>
+            <a href="/analysis" class="nav-link">
+                🤖 AI Analysis
+            </a>
+        </div>
+
+        <!-- Recording Status -->
+        {% if is_recording %}
+        <div class="recording-status">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+                <div style="width: 12px; height: 12px; background: #fff; border-radius: 50%; animation: recordingBlink 1s infinite;"></div>
+                <span>🔴 LIVE RECORDING - {{ '%02d:%02d' | format(duration // 60, duration % 60) }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Real-time Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" style="color: var(--primary);">{{ word_count }}</div>
+                <div class="metric-label">Words Captured</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" style="color: var(--accent);">{{ segments_count }}</div>
+                <div class="metric-label">Segments</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" style="color: var(--secondary);">{{ '%02d:%02d' | format(duration // 60, duration % 60) }}</div>
+                <div class="metric-label">Duration</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" style="color: var(--success);">{{ wpm }}</div>
+                <div class="metric-label">Words/Min</div>
+            </div>
+        </div>
+
+        <!-- Transcript Content -->
+        {% if full_text %}
+        
+        <!-- Transcript Cleaning Control -->
+        <div class="transcript-cleaning-control">
+            <label>
+                <input type="checkbox" id="cleanTranscriptToggle" checked>
+                <span>🧹 Clean Repetitions (Display Only)</span>
+            </label>
+            <p class="help-text">
+                Removes repeated words and phrases for cleaner reading. Original transcript is preserved.
+            </p>
+            <div id="cleaned-badge" class="cleaned-badge" style="display: none;">
+                🎯 <span id="removed-count">0</span> repetitions cleaned
+            </div>
+        </div>
+
+        <!-- Transcript Display -->
+        <div class="transcript-container" id="transcript-container">
+            <div class="transcript-meta">
+                <div class="transcript-stats">
+                    <div class="stat-item">
+                        📊 <span id="word-count-display">{{ word_count }}</span> words
+                    </div>
+                    <div class="stat-item">
+                        📝 <span id="segments-count-display">{{ segments_count }}</span> segments
+                    </div>
+                    <div class="stat-item">
+                        ⏱️ <span id="duration-display">{{ '%d:%02d' | format(duration // 60, duration % 60) }}</span> duration
+                    </div>
+                </div>
+                <div class="stat-item">
+                    {% if audio_source == 'both' %}
+                    🎧 Dual Source (Mic + System)
+                    {% elif audio_source == 'system' %}
+                    🔊 System Audio
+                    {% else %}
+                    🎤 Microphone
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div id="transcript-display" style="font-size: 1.05rem; line-height: 1.8; white-space: pre-wrap;" data-original="{{ full_text }}">
+                {{ full_text }}
+            </div>
+        </div>
+        
+        {% else %}
+        
+        <div class="content-card" style="text-align: center; padding: 4rem 2rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎙️</div>
+            <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Ready to Capture</h3>
+            <p style="color: var(--text-secondary); font-size: 1rem; max-width: 600px; margin: 0 auto;">
+                Start recording from the Configuration & Controls page to see real-time transcription here.
+                The AI will transcribe your speech with intelligent cleaning and formatting.
+            </p>
+            <div style="margin-top: 2rem;">
+                <a href="/" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: var(--gradient-primary); color: white; text-decoration: none; border-radius: 10px; font-weight: 600; transition: all 0.3s ease;">
+                    ⚙️ Go to Controls
+                </a>
+            </div>
+        </div>
+        
+        {% endif %}
+
+        <!-- Auto-scroll Toggle -->
+        {% if full_text %}
+        <button class="auto-scroll-toggle" id="autoScrollToggle" onclick="toggleAutoScroll()">
+            📜 Auto-scroll: ON
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        let autoScrollEnabled = true;
+        let isRecording = {{ 'true' if is_recording else 'false' }};
+        let socket;
+
+        // Initialize SocketIO connection
+        function initializeSocket() {
+            socket = io();
+            
+            // Handle connection
+            socket.on('connect', function() {
+                console.log('🔗 Connected to server');
+                socket.emit('request_status');
+            });
+            
+            // Handle disconnection
+            socket.on('disconnect', function() {
+                console.log('❌ Disconnected from server');
+            });
+            
+            // Handle real-time transcript updates
+            socket.on('transcript_update', function(data) {
+                console.log('📝 New transcript:', data.new_text);
+                updateTranscriptRealtime(data);
+            });
+            
+            // Handle status updates
+            socket.on('status_update', function(data) {
+                console.log('📊 Status update:', data);
+                updateStatusRealtime(data);
+            });
+            
+            // Handle recording stopped
+            socket.on('recording_stopped', function(data) {
+                console.log('⏸️ Recording stopped');
+                isRecording = false;
+                updateRecordingStatus();
+            });
+        }
+
+        // Clean Repeated Words/Phrases from Transcript (Front-End Only)
+        function cleanTranscriptRepetitions(text) {
+            if (!text || text.trim().length === 0) {
+                return { cleaned: text, removedCount: 0 };
+            }
+            
+            let removedCount = 0;
+            
+            // Remove excessive consecutive word repetitions (3+ times)
+            text = text.replace(/(\b[\w']+\b)(\s+\1){2,}/gi, (match, word) => {
+                const count = (match.match(new RegExp(word, 'gi')) || []).length;
+                removedCount += count - 1;
+                return word;
+            });
+            
+            // Remove repeated short phrases
+            text = text.replace(/(\b[\w\s']{2,30}\b[.!?,;]?)(\s*\1){1,}/gi, (match, phrase) => {
+                const count = (match.match(new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
+                removedCount += count - 1;
+                return phrase;
+            });
+            
+            // Remove excessive "yes/no" repetitions
+            text = text.replace(/\b(yes|no|yeah|yep|nope|okay|ok)\b([,\s]+\1\b){2,}/gi, (match, word) => {
+                const count = (match.match(new RegExp(word, 'gi')) || []).length;
+                removedCount += count - 1;
+                return word;
+            });
+            
+            // Clean up punctuation and spaces
+            text = text.replace(/([.!?,;])\s*\1{2,}/g, '$1');
+            text = text.replace(/\s{2,}/g, ' ');
+            
+            return { 
+                cleaned: text.trim(),
+                removedCount: removedCount
+            };
+        }
+
+        function cleanTranscriptAdvanced(text) {
+            if (!text || text.trim().length === 0) {
+                return { cleaned: text, removedCount: 0 };
+            }
+            
+            // First apply basic cleaning
+            let result = cleanTranscriptRepetitions(text);
+            text = result.cleaned;
+            let removedCount = result.removedCount;
+            
+            // Remove very similar consecutive sentences
+            const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+            const uniqueSentences = [];
+            const seenSentences = new Set();
+            
+            sentences.forEach(sentence => {
+                const normalized = sentence.trim().toLowerCase().replace(/\s+/g, ' ');
+                
+                const recentSentences = Array.from(seenSentences).slice(-3);
+                const isSimilar = recentSentences.some(recent => {
+                    const words1 = normalized.split(' ');
+                    const words2 = recent.split(' ');
+                    const overlap = words1.filter(w => words2.includes(w)).length;
+                    const similarity = overlap / Math.max(words1.length, words2.length);
+                    return similarity > 0.8;
+                });
+                
+                if (!isSimilar) {
+                    uniqueSentences.push(sentence);
+                    seenSentences.add(normalized);
+                } else {
+                    removedCount++;
+                }
+            });
+            
+            return {
+                cleaned: uniqueSentences.join(' ').trim(),
+                removedCount: removedCount
+            };
+        }
+
+        function updateTranscriptDisplay() {
+            const displayElement = document.getElementById('transcript-display');
+            const cleanToggle = document.getElementById('cleanTranscriptToggle');
+            const cleanedBadge = document.getElementById('cleaned-badge');
+            const removedCountSpan = document.getElementById('removed-count');
+            
+            if (!displayElement) return;
+            
+            // Get original text
+            const originalText = displayElement.getAttribute('data-original') || displayElement.textContent;
+            
+            // Store original if not stored
+            if (!displayElement.getAttribute('data-original')) {
+                displayElement.setAttribute('data-original', originalText);
+            }
+            
+            const shouldClean = cleanToggle ? cleanToggle.checked : true;
+            
+            if (shouldClean && originalText) {
+                const result = cleanTranscriptAdvanced(originalText);
+                displayElement.textContent = result.cleaned;
+                
+                // Show badge
+                if (result.removedCount > 0 && cleanedBadge && removedCountSpan) {
+                    removedCountSpan.textContent = result.removedCount;
+                    cleanedBadge.style.display = 'inline-flex';
+                }
+            } else {
+                displayElement.textContent = originalText;
+                if (cleanedBadge) {
+                    cleanedBadge.style.display = 'none';
+                }
+            }
+
+            // Auto-scroll to bottom if enabled
+            if (autoScrollEnabled) {
+                const container = document.getElementById('transcript-container');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        }
+
+        function updateTranscriptRealtime(data) {
+            // Update transcript display
+            const displayElement = document.getElementById('transcript-display');
+            if (displayElement) {
+                displayElement.setAttribute('data-original', data.full_text);
+                updateTranscriptDisplay();
+            }
+            
+            // Update metrics in real-time
+            updateMetricsRealtime(data);
+        }
+
+        function updateMetricsRealtime(data) {
+            // Update word count
+            const wordCountEl = document.getElementById('word-count-display');
+            if (wordCountEl) {
+                wordCountEl.textContent = data.word_count;
+            }
+            
+            // Update segments count
+            const segmentsCountEl = document.getElementById('segments-count-display');
+            if (segmentsCountEl) {
+                segmentsCountEl.textContent = data.segments_count;
+            }
+            
+            // Update duration
+            const durationEl = document.getElementById('duration-display');
+            if (durationEl && data.duration) {
+                const minutes = Math.floor(data.duration / 60);
+                const seconds = data.duration % 60;
+                durationEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // Update metric cards
+            const metricCards = document.querySelectorAll('.metric-card .metric-value');
+            if (metricCards.length >= 4) {
+                metricCards[0].textContent = data.word_count || 0;
+                metricCards[1].textContent = data.segments_count || 0;
+                metricCards[2].textContent = data.duration ? `${Math.floor(data.duration / 60)}:${(data.duration % 60).toString().padStart(2, '0')}` : '0:00';
+                metricCards[3].textContent = data.wpm || 0;
+            }
+        }
+
+        function updateStatusRealtime(data) {
+            isRecording = data.is_recording;
+            updateRecordingStatus();
+        }
+
+        function updateRecordingStatus() {
+            // Update recording status display if it exists
+            const recordingStatus = document.querySelector('.recording-status');
+            if (recordingStatus) {
+                recordingStatus.style.display = isRecording ? 'block' : 'none';
+            }
+        }
+
+        function toggleAutoScroll() {
+            autoScrollEnabled = !autoScrollEnabled;
+            const button = document.getElementById('autoScrollToggle');
+            if (button) {
+                if (autoScrollEnabled) {
+                    button.textContent = '📜 Auto-scroll: ON';
+                    button.classList.remove('disabled');
+                } else {
+                    button.textContent = '📜 Auto-scroll: OFF';
+                    button.classList.add('disabled');
+                }
+            }
+        }
+
+        async function updateTranscriptOnly() {
+            try {
+                const response = await fetch('/api/transcript');
+                const data = await response.json();
+                
+                const transcriptContainer = document.getElementById('transcript-display');
+                
+                if (transcriptContainer && data.full_text) {
+                    // Store original text
+                    transcriptContainer.setAttribute('data-original', data.full_text);
+                    
+                    // Apply cleaning if enabled
+                    updateTranscriptDisplay();
+                }
+                
+                // Update metrics
+                const wordCountEl = document.getElementById('word-count-display');
+                const segmentsCountEl = document.getElementById('segments-count-display');
+                
+                if (wordCountEl && data.full_text) {
+                    const wordCount = data.full_text.split(' ').length;
+                    wordCountEl.textContent = wordCount;
+                }
+                
+                if (segmentsCountEl) {
+                    segmentsCountEl.textContent = data.segment_count;
+                }
+                
+            } catch (error) {
+                console.error('Error updating transcript:', error);
+            }
+        }
+
+        function startAutoRefresh() {
+            if (isRecording) {
+                autoRefreshInterval = setInterval(() => {
+                    updateTranscriptOnly();
+                }, 3000); // Update every 3 seconds
+            }
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTranscriptDisplay();
+            
+            const cleanToggle = document.getElementById('cleanTranscriptToggle');
+            if (cleanToggle) {
+                cleanToggle.addEventListener('change', updateTranscriptDisplay);
+            }
+
+            // Initialize SocketIO connection for real-time updates
+            initializeSocket();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (socket) {
+                socket.disconnect();
+            }
+        });
+    </script>
+</body>
+</html>
