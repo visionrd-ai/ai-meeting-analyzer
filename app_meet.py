@@ -3,17 +3,17 @@ warnings.filterwarnings('ignore')
 
 import os
 import time
-import json
 import pickle
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 from audio_processor_faster_whisper_meet import EnhancedAudioProcessor
 from summarizer import MeetingSummarizer
 import threading
+from grok_chat import MeetingChatGrok
 
 # Load environment variables from .env file
 load_dotenv()
@@ -54,6 +54,9 @@ app_state = {
     'analysis_start_time': None,  # Track when analysis started
     'audio_source': 'mic',  # 'mic', 'system', or 'both'
     'transcription_engine': 'faster_whisper',  # 'faster_whisper' or 'assemblyai'
+    'chat_history': [],  # For future chat features
+    'first_recording_done': False,  # To track first recording completion
+    'chat_instance': None  # To hold MeetingChatGrok instance
 }
 
 # ================================================================
@@ -236,6 +239,7 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic', t
         app_state['words_threshold'] = words_threshold
         app_state['audio_source'] = audio_source
         app_state['transcription_engine'] = transcription_engine
+        app_state['chat_history'] = []
         
         # Initialize AI components with appropriate settings
         print(f"Initializing AI components in {mode} mode with {audio_source} audio source...")
@@ -332,7 +336,7 @@ def stop_recording():
         
         # Get all transcript segments
         segments = load_transcripts()
-        
+
         if len(segments) == 0:
             app_state['is_recording'] = False
             app_state['is_analyzing'] = False
@@ -350,6 +354,14 @@ def stop_recording():
                     for segment in segments:
                         fresh_summarizer.add_transcript(segment, auto_analyze=False)
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
+                    full_transcript = " ".join(segments)
+                    if app_state['first_recording_done']:
+                        if not app_state['chat_instance']:
+                            app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'])
+                        else:
+                            app_state['chat_instance'].reset_chat(full_transcript, app_state['final_summary'])
+                    else:
+                        app_state['first_recording_done'] = True
                     print("✅ Final summary generated")
                     
                     # Emit final analysis complete event
@@ -362,6 +374,7 @@ def stop_recording():
                     print("No API key for final summary")
             except Exception as e:
                 print(f"Error generating final summary: {e}")
+                app_state['first_recording_done'] = False
                 import traceback
                 traceback.print_exc()
             finally:
@@ -519,6 +532,18 @@ def calculate_metrics():
         'full_text': full_text
     }
 
+def perform_chat(user_message: str) -> str:
+    """Handle chat interactions (future feature)."""
+    if not app_state['chat_instance']:
+        return "Chat feature is not initialized yet."
+    
+    try:
+        response = app_state['chat_instance'].send_chat(user_message)
+        app_state['chat_history'].append({"user": user_message, "response": response})
+        return response
+    except Exception as e:
+        print(f"Error in chat interaction: {e}")
+        return "Error processing chat message."
 # ================================================================
 # FLASK ROUTES
 # ================================================================
@@ -742,6 +767,25 @@ def export_summary():
         })
     return jsonify({'error': 'No summary available'}), 404
 
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    """API endpoint for chat interactions (future feature)."""
+    try:
+        data = request.get_json() or {}
+        user_message = data.get('message', '').strip()
+
+        response = perform_chat(user_message)
+        return jsonify({
+            "success": True,
+            "response": response
+        })
+    except Exception as e:
+        print(f"Error in chat API: {e}")
+        return jsonify({
+            "success": False,
+            "response": "Error processing chat message."
+        })
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors."""
@@ -804,6 +848,9 @@ def handle_connect():
         'session_id': app_state['recording_session_id'],
         'analysis_mode': app_state['analysis_mode'],
         'audio_source': app_state['audio_source'],
+        'first_recording_done': app_state['first_recording_done'],  
+        'current_analysis': app_state['current_analysis'],
+        'chat_history': app_state['chat_history'],
         **metrics
     })
 
@@ -824,6 +871,8 @@ def handle_status_request():
         'audio_source': app_state['audio_source'],
         'current_analysis': app_state['current_analysis'],
         'final_summary': app_state['final_summary'],
+        'first_recording_done': app_state['first_recording_done'],
+        'chat_history': app_state['chat_history'],
         **metrics
     })
 
@@ -841,6 +890,6 @@ if __name__ == '__main__':
         app,
         debug=True,
         host='0.0.0.0',
-        port=5000,
+        port=6000,
         allow_unsafe_werkzeug=True
     )
