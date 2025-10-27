@@ -182,10 +182,36 @@ class MeetingChatGrok:
     self.latest_analysis = analysis
     self.system_prompt = self._inject_meeting_context(system_prompt)
 
+  
 if __name__ == "__main__":
-  # Example usage
-  api_key = os.getenv("XAI_API_KEY", "your_xai_api_key_here")
-  latest_transcript = """
+    import os
+    import sys
+    import argparse
+    from pathlib import Path
+    import shutil
+    import textwrap
+
+    # Optional: nice output if available
+    try:
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.prompt import Prompt
+        USE_RICH = True
+        console = Console()
+    except Exception:
+        USE_RICH = False
+
+    def read_text_or_default(p: str, default: str = "") -> str:
+        if p and Path(p).exists():
+            return Path(p).read_text(encoding="utf-8")
+        return default
+
+    parser = argparse.ArgumentParser(description="Meeting Chat (Grok) – interactive CLI")
+    parser.add_argument("--title", type=str, default="Meeting Chat (Grok)", help="Title for header")
+    args = parser.parse_args()
+
+    api_key = os.getenv("XAI_API_KEY", "your_xai_api_key_here")
+    latest_transcript = """
 [Meeting Title] InspectionAI OCR & Deployment Sync
 [Date] 2025-10-27 11:00–11:25 (Asia/Karachi)
 [Attendees] Aisha (PM), Talal (AI Lead), Bilal (ML Eng), Zara (DevOps), Hamza (Security), Noor (Data Eng)
@@ -242,7 +268,7 @@ if __name__ == "__main__":
 
 [00:25:00] Aisha (PM): Thanks all—done.  
   """
-  latest_analysis = """
+    latest_analysis = """
 [Section] Overview
 The team aligned on a unified evaluation stack (GriTS + TEDS + text F1), locked canonicalization for tables, and outlined deployment, cost, and security steps. Two date clarifications were recorded.
 
@@ -285,5 +311,74 @@ The team aligned on a unified evaluation stack (GriTS + TEDS + text F1), locked 
 - PM: Aisha | AI Lead: Talal | ML Eng: Bilal | DevOps: Zara | Security: Hamza | Data Eng: Noor
 """
 
-  chat = MeetingChatGrok(api_key, latest_transcript, latest_analysis)
-  import pdb; pdb.set_trace()
+    # Instantiate your chat class (uses your existing __init__)
+    chat = MeetingChatGrok(api_key_grok=api_key,
+                           latest_transcript=latest_transcript,
+                           latest_analysis=latest_analysis)
+
+    # ---- Pretty header ----
+    if USE_RICH:
+        console.rule(f"[bold]Chat With Grok[/bold]")
+        console.print("[dim]Type your question. Commands: /exit, /history[/dim]")
+    else:
+        term_w = shutil.get_terminal_size().columns
+        print("=" * term_w)
+        print("Chat With Grok".center(term_w))
+        print("=" * term_w)
+        print("Type your question. Commands: /exit, /history")
+
+    history = []  # (q, a) tuples for quick review
+
+    # ---- REPL loop ----
+    while True:
+        try:
+            q = Prompt.ask("[bold green]Q[/bold green]") if USE_RICH else input("Q> ")
+            q = (q or "").strip()
+            if not q:
+                continue
+            if q.lower() in {"/exit", "/quit"}:
+                break
+            if q.lower() == "/history":
+                if USE_RICH:
+                    if not history:
+                        console.print("[dim]No history yet.[/dim]")
+                    else:
+                        for i, (qq, aa) in enumerate(history, 1):
+                            console.print(Panel.fit(aa, title=f"#{i} A", subtitle=f"Q: {qq}"))
+                else:
+                    if not history:
+                        print("[No history yet]")
+                    else:
+                        for i, (qq, aa) in enumerate(history, 1):
+                            print(f"\n--- #{i} Q ---\n{qq}\n--- #{i} A ---\n{aa}\n")
+                continue
+
+            # ---- Query the model (non-streaming) ----
+            a = chat.send_chat(q)
+            history.append((q, a))
+
+            # ---- Pretty print the answer ----
+            if USE_RICH:
+                console.print(Panel.fit(a, title="Answer", subtitle="Grok", border_style="cyan"))
+            else:
+                term_w = shutil.get_terminal_size().columns
+                print("-" * term_w)
+                print("Answer".center(term_w))
+                print("-" * term_w)
+                wrapped = textwrap.fill(a, width=max(60, min(120, term_w - 4)))
+                print(wrapped)
+                print("-" * term_w)
+
+        except KeyboardInterrupt:
+            # graceful exit on Ctrl+C
+            break
+        except Exception as e:
+            if USE_RICH:
+                console.print(f"[red]Error:[/red] {e}")
+            else:
+                print(f"Error: {e}", file=sys.stderr)
+
+    if USE_RICH:
+        console.rule("[dim]Session ended[/dim]")
+    else:
+        print("\nSession ended.")
