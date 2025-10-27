@@ -304,7 +304,26 @@ class EnhancedAudioProcessor:
         
         # Validate audio source availability
         self._validate_audio_sources()
+        
+        # Check for NumPy compatibility issues
+        self._check_numpy_compatibility()
     
+    def _check_numpy_compatibility(self):
+        """Check for NumPy compatibility issues with soundcard."""
+        try:
+            import numpy as np
+            numpy_version = np.__version__
+            major, minor = map(int, numpy_version.split('.')[:2])
+            
+            # NumPy 1.20+ removed fromstring in binary mode
+            if major > 1 or (major == 1 and minor >= 20):
+                print(f"⚠️ NumPy version {numpy_version} detected")
+                print("⚠️ System audio may have compatibility issues with soundcard library")
+                print("💡 If system audio fails, try: pip install numpy==1.19.5")
+                print("💡 Or use microphone-only recording for now")
+        except Exception as e:
+            print(f"Could not check NumPy compatibility: {e}")
+
     def _validate_audio_sources(self):
         """Check if requested audio sources are available."""
         if self.audio_source in ["mic", "both"]:
@@ -483,7 +502,7 @@ class EnhancedAudioProcessor:
             return False
     
     def _start_system_recording(self) -> bool:
-        """Start system audio-only recording."""
+        """Start system audio-only recording with fallback handling."""
         try:
             loopback = self._get_system_loopback()
             if not loopback:
@@ -512,10 +531,11 @@ class EnhancedAudioProcessor:
             
         except Exception as e:
             print(f"❌ System audio error: {e}")
+            print("💡 Consider using microphone-only recording")
             return False
     
     def _start_dual_recording(self) -> bool:
-        """Start both mic and system audio recording."""
+        """Start both mic and system audio recording with graceful fallback."""
         print("Starting dual capture mode...")
         
         # Start microphone
@@ -526,13 +546,22 @@ class EnhancedAudioProcessor:
         # Start system audio
         system_ok = self._start_system_recording()
         if not system_ok:
-            print("⚠ Failed to start system audio, continuing with mic only")
+            print("⚠ Failed to start system audio (likely NumPy compatibility issue)")
+            print("💡 Falling back to microphone-only recording")
+            # Update audio source to reflect actual state
+            self.audio_source = "mic"
         
         if not mic_ok and not system_ok:
             print("❌ Both sources failed!")
             return False
         
-        print("✓ Dual capture mode active")
+        if mic_ok and system_ok:
+            print("✓ Dual capture mode active")
+        elif mic_ok:
+            print("✓ Microphone-only mode active (system audio failed)")
+        else:
+            print("✓ System audio-only mode active (microphone failed)")
+        
         return True
     
     def _find_best_mic_device(self) -> Optional[int]:
@@ -567,26 +596,40 @@ class EnhancedAudioProcessor:
         return (None, pyaudio.paContinue)
     
     def _system_capture_loop(self):
-        """Thread that captures system audio using soundcard."""
+        """Thread that captures system audio using soundcard with error handling."""
         print("System audio capture thread started")
         
         try:
             # Record from the loopback microphone device
             with self.system_recorder.recorder(samplerate=RATE) as recorder:
                 while self.is_recording:
-                    # Capture audio chunk
-                    data = recorder.record(numframes=CHUNK_SIZE)
-                    
-                    # Handle stereo -> mono conversion
-                    if data.ndim > 1:
-                        data = data.mean(axis=1)
-                    
-                    # Convert to int16 bytes
-                    audio_int16 = (data * 32767).astype(np.int16)
-                    audio_bytes = audio_int16.tobytes()
-                    
-                    # Add to queue
-                    self.system_queue.put(audio_bytes)
+                    try:
+                        # Capture audio chunk
+                        data = recorder.record(numframes=CHUNK_SIZE)
+                        
+                        # Handle stereo -> mono conversion
+                        if data.ndim > 1:
+                            data = data.mean(axis=1)
+                        
+                        # Convert to int16 bytes
+                        audio_int16 = (data * 32767).astype(np.int16)
+                        audio_bytes = audio_int16.tobytes()
+                        
+                        # Add to queue
+                        self.system_queue.put(audio_bytes)
+                        
+                    except ValueError as e:
+                        if "fromstring" in str(e):
+                            print("⚠️ NumPy compatibility issue detected with soundcard library")
+                            print("This is a known issue with newer NumPy versions")
+                            print("System audio capture will be disabled for this session")
+                            break
+                        else:
+                            print(f"System audio capture error: {e}")
+                            continue
+                    except Exception as e:
+                        print(f"Unexpected system audio error: {e}")
+                        continue
                     
         except AttributeError as e:
             print(f"❌ System capture error: {e}")

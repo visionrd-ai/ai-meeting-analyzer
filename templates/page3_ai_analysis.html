@@ -361,6 +361,282 @@
             box-shadow: var(--shadow-xl);
         }
 
+        /* Chatbot Styles */
+        .chatbot-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 400px;
+            max-height: 600px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--shadow-xl);
+            border: 1px solid var(--border-light);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chatbot-container.open {
+            display: flex;
+        }
+
+        .chatbot-header {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chatbot-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .chatbot-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .chatbot-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .chatbot-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            max-height: 400px;
+            min-height: 300px;
+        }
+
+        .chat-message {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-message.user {
+            align-items: flex-end;
+        }
+
+        .chat-message.assistant {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .message-bubble.user {
+            background: var(--gradient-primary);
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .message-bubble.assistant {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 6px;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            padding: 0 0.5rem;
+        }
+
+        .chatbot-input {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chatbot-input input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 25px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chatbot-input input:focus {
+            border-color: var(--primary);
+        }
+
+        .chatbot-send {
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 1.2rem;
+        }
+
+        .chatbot-send:hover {
+            transform: scale(1.05);
+            box-shadow: var(--shadow-md);
+        }
+
+        .chatbot-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .chatbot-toggle {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+
+        .chatbot-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .chatbot-toggle.hidden {
+            display: none;
+        }
+
+        .chat-loading {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .chat-loading .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .chat-welcome {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            padding: 2rem 1rem;
+            line-height: 1.5;
+        }
+
+        .chat-welcome strong {
+            color: var(--text-primary);
+        }
+
+        .chat-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .chat-action-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-primary);
+        }
+
+        .chat-action-btn:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .chat-locked {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .chat-locked-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .chat-locked-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .chat-locked-message {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-width: 280px;
+            margin: 0 auto;
+        }
+
+        .chatbot-input.locked {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .chatbot-toggle.locked {
+            opacity: 0.7;
+            animation: pulse-locked 2s infinite;
+        }
+
+        @keyframes pulse-locked {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 0.4; }
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 1rem;
@@ -372,6 +648,41 @@
 
             .app-header h1 {
                 font-size: 1.5rem;
+            }
+            
+            .navigation-links { 
+                flex-direction: column; 
+                align-items: center; 
+            }
+            
+            .analysis-grid { 
+                grid-template-columns: 1fr; 
+            }
+            
+            /* Mobile chatbot adjustments */
+            .chatbot-container {
+                width: calc(100vw - 2rem);
+                height: calc(100vh - 4rem);
+                max-height: none;
+                bottom: 1rem;
+                right: 1rem;
+                left: 1rem;
+                border-radius: 15px;
+            }
+            
+            .chatbot-messages {
+                max-height: none;
+                min-height: calc(100vh - 200px);
+            }
+            
+            .chatbot-toggle {
+                bottom: 1rem;
+                right: 1rem;
+            }
+            
+            .refresh-button {
+                bottom: 5rem;
+                right: 1rem;
             }
 
             .navigation-links {
@@ -541,6 +852,30 @@
             🔄 Refresh
         </button>
         {% endif %}
+
+        <!-- Chatbot Toggle Button -->
+        <button class="chatbot-toggle" id="chatbotToggle" onclick="toggleChatbot()">
+            💬
+        </button>
+
+        <!-- Chatbot Container -->
+        <div class="chatbot-container" id="chatbotContainer">
+            <div class="chatbot-header">
+                <h3>🤖 Meeting Assistant</h3>
+                <button class="chatbot-close" onclick="toggleChatbot()">×</button>
+            </div>
+            
+            <div class="chatbot-messages" id="chatbotMessages">
+                <!-- This will be populated by JavaScript based on lock status -->
+            </div>
+            
+            <div class="chatbot-input">
+                <input type="text" id="chatInput" placeholder="Ask about your meeting..." onkeypress="handleChatKeyPress(event)">
+                <button class="chatbot-send" id="chatSendBtn" onclick="sendChatMessage()">
+                    ➤
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- JavaScript -->
@@ -621,6 +956,9 @@
                 console.log('🎉 Session complete');
                 isRecording = false;
                 isAnalyzing = false;
+                
+                // Show chatbot availability notification
+                showChatbotNotification();
             });
             
             // Handle status updates
@@ -629,9 +967,19 @@
                 isRecording = data.is_recording;
                 isAnalyzing = data.is_analyzing;
                 
+                // Update chat lock status
+                updateChatLockStatus(data.chat_locked, data.is_recording);
+                
                 if (data.current_analysis && !isAnalyzing) {
                     updateAnalysisContent(data.current_analysis);
                 }
+            });
+            
+            // Handle chat unlock event
+            socket.on('chat_unlocked', function(data) {
+                console.log('🔓 Chat unlocked:', data.message);
+                updateChatLockStatus(false, false);
+                showChatUnlockedNotification(data.message);
             });
         }
 
@@ -835,6 +1183,407 @@
                 socket.disconnect();
             }
         });
+
+        // ================================================================
+        // CHATBOT FUNCTIONALITY
+        // ================================================================
+
+        let chatHistory = [];
+        let isChatLoading = false;
+        let isChatLocked = true; // Chat starts locked
+
+        function toggleChatbot() {
+            const container = document.getElementById('chatbotContainer');
+            const toggle = document.getElementById('chatbotToggle');
+            
+            if (container.classList.contains('open')) {
+                container.classList.remove('open');
+                toggle.classList.remove('hidden');
+            } else {
+                container.classList.add('open');
+                toggle.classList.add('hidden');
+                
+                // Update chat content based on lock status
+                updateChatContent();
+                
+                // Focus on input when opening (only if unlocked)
+                if (!isChatLocked) {
+                    setTimeout(() => {
+                        document.getElementById('chatInput').focus();
+                    }, 100);
+                }
+            }
+        }
+
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
+            }
+        }
+
+        function sendQuickMessage(message) {
+            if (isChatLocked) {
+                return;
+            }
+            document.getElementById('chatInput').value = message;
+            sendChatMessage();
+        }
+
+        async function sendChatMessage() {
+            // Check if chat is locked
+            if (isChatLocked) {
+                return;
+            }
+            
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message || isChatLoading) return;
+            
+            // Clear input
+            input.value = '';
+            
+            // Add user message to chat
+            addChatMessage(message, 'user');
+            
+            // Show loading
+            isChatLoading = true;
+            const loadingId = addChatLoading();
+            updateSendButton(true);
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Remove loading message
+                removeChatLoading(loadingId);
+                
+                if (data.success) {
+                    addChatMessage(data.response, 'assistant');
+                } else if (data.locked) {
+                    // Chat got locked while we were typing
+                    updateChatLockStatus(true, data.reason === 'recording');
+                    addChatMessage(`Chat is currently locked: ${data.error}`, 'assistant', true);
+                } else {
+                    addChatMessage(`Sorry, I encountered an error: ${data.error}`, 'assistant', true);
+                }
+                
+            } catch (error) {
+                console.error('Chat error:', error);
+                removeChatLoading(loadingId);
+                addChatMessage('Sorry, I\'m having trouble connecting. Please try again.', 'assistant', true);
+            } finally {
+                isChatLoading = false;
+                updateSendButton(false);
+            }
+        }
+
+        function addChatMessage(message, sender, isError = false) {
+            const messagesContainer = document.getElementById('chatbotMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `message-bubble ${sender}`;
+            if (isError) bubble.style.background = '#FEE2E2';
+            if (isError) bubble.style.color = '#991B1B';
+            bubble.textContent = message;
+            
+            const time = document.createElement('div');
+            time.className = 'message-time';
+            time.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            messageDiv.appendChild(bubble);
+            messageDiv.appendChild(time);
+            messagesContainer.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Store in history
+            chatHistory.push({
+                message: message,
+                sender: sender,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function addChatLoading() {
+            const messagesContainer = document.getElementById('chatbotMessages');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'chat-message assistant';
+            loadingDiv.id = 'chat-loading-' + Date.now();
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble assistant';
+            bubble.innerHTML = '<div class="chat-loading"><div class="spinner"></div>Thinking...</div>';
+            
+            loadingDiv.appendChild(bubble);
+            messagesContainer.appendChild(loadingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            return loadingDiv.id;
+        }
+
+        function removeChatLoading(loadingId) {
+            const loadingElement = document.getElementById(loadingId);
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+        }
+
+        function updateSendButton(loading) {
+            const sendBtn = document.getElementById('chatSendBtn');
+            sendBtn.disabled = loading;
+            sendBtn.innerHTML = loading ? '<div class="spinner"></div>' : '➤';
+        }
+
+        async function resetChatHistory() {
+            try {
+                const response = await fetch('/api/chat/reset', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Clear chat UI
+                    const messagesContainer = document.getElementById('chatbotMessages');
+                    messagesContainer.innerHTML = `
+                        <div class="chat-welcome">
+                            <strong>👋 Chat Reset!</strong><br>
+                            I'm ready to help you analyze your meeting again.
+                        </div>
+                        <div class="chat-actions">
+                            <button class="chat-action-btn" onclick="sendQuickMessage('Summarize the key decisions')">📋 Key Decisions</button>
+                            <button class="chat-action-btn" onclick="sendQuickMessage('What are the action items?')">✅ Action Items</button>
+                            <button class="chat-action-btn" onclick="sendQuickMessage('List the main participants')">👥 Participants</button>
+                        </div>
+                    `;
+                    chatHistory = [];
+                } else {
+                    console.error('Failed to reset chat:', data.error);
+                }
+            } catch (error) {
+                console.error('Reset chat error:', error);
+            }
+        }
+
+        function updateChatLockStatus(locked, isRecording) {
+            isChatLocked = locked;
+            const toggle = document.getElementById('chatbotToggle');
+            const input = document.querySelector('.chatbot-input');
+            
+            // Update toggle button appearance
+            if (locked) {
+                toggle.classList.add('locked');
+                toggle.title = isRecording ? 'Chat locked during recording' : 'Chat locked - complete a recording first';
+            } else {
+                toggle.classList.remove('locked');
+                toggle.title = 'Chat with Meeting Assistant';
+            }
+            
+            // Update input area
+            if (input) {
+                if (locked) {
+                    input.classList.add('locked');
+                } else {
+                    input.classList.remove('locked');
+                }
+            }
+            
+            // Update chat content if chatbot is open
+            const container = document.getElementById('chatbotContainer');
+            if (container && container.classList.contains('open')) {
+                updateChatContent();
+            }
+        }
+
+        function updateChatContent() {
+            const messagesContainer = document.getElementById('chatbotMessages');
+            
+            if (isChatLocked) {
+                // Show locked state
+                messagesContainer.innerHTML = `
+                    <div class="chat-locked">
+                        <div class="chat-locked-icon">🔒</div>
+                        <div class="chat-locked-title">Chat Locked</div>
+                        <div class="chat-locked-message">
+                            ${isRecording ? 
+                                'Chat is locked during recording. Stop recording to unlock and chat about your meeting.' : 
+                                'Chat is locked. Start and complete a recording session to unlock the meeting assistant.'
+                            }
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Show unlocked state with welcome message or existing chat
+                if (chatHistory.length === 0) {
+                    messagesContainer.innerHTML = `
+                        <div class="chat-welcome">
+                            <strong>👋 Hello! I'm your Meeting Assistant</strong><br>
+                            I can help you analyze your meeting transcript and findings. Ask me about:
+                            <br><br>
+                            • Key decisions and action items<br>
+                            • Meeting participants and roles<br>
+                            • Technical discussions and recommendations<br>
+                            • Timeline and deadlines<br>
+                            • Any specific details from the meeting
+                        </div>
+                        
+                        <div class="chat-actions">
+                            <button class="chat-action-btn" onclick="sendQuickMessage('Summarize the key decisions')">📋 Key Decisions</button>
+                            <button class="chat-action-btn" onclick="sendQuickMessage('What are the action items?')">✅ Action Items</button>
+                            <button class="chat-action-btn" onclick="sendQuickMessage('List the main participants')">👥 Participants</button>
+                        </div>
+                    `;
+                }
+                // If there's chat history, it will be preserved
+            }
+        }
+
+        function showChatUnlockedNotification(message) {
+            // Create notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: linear-gradient(135deg, #10B981, #059669);
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+                z-index: 1001;
+                animation: slideInDown 0.5s ease;
+                cursor: pointer;
+                max-width: 320px;
+            `;
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.5rem;">🔓</span>
+                    <div>
+                        <div style="font-weight: 700; margin-bottom: 0.25rem;">Chat Unlocked!</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">${message}</div>
+                    </div>
+                </div>
+            `;
+            
+            notification.onclick = function() {
+                toggleChatbot();
+                notification.remove();
+            };
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideInDown 0.5s ease reverse';
+                    setTimeout(() => notification.remove(), 500);
+                }
+            }, 10000);
+        }
+
+        // Add reset button to chatbot header
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize chat content
+            updateChatContent();
+            
+            const chatHeader = document.querySelector('.chatbot-header');
+            if (chatHeader) {
+                const resetBtn = document.createElement('button');
+                resetBtn.innerHTML = '🔄';
+                resetBtn.title = 'Reset Chat';
+                resetBtn.style.cssText = `
+                    background: none;
+                    border: none;
+                    color: white;
+                    font-size: 1.2rem;
+                    cursor: pointer;
+                    padding: 0.25rem;
+                    border-radius: 4px;
+                    margin-right: 0.5rem;
+                    transition: background 0.2s;
+                `;
+                resetBtn.onmouseover = () => resetBtn.style.background = 'rgba(255,255,255,0.2)';
+                resetBtn.onmouseout = () => resetBtn.style.background = 'none';
+                resetBtn.onclick = resetChatHistory;
+                
+                chatHeader.insertBefore(resetBtn, chatHeader.lastElementChild);
+            }
+        });
+
+        function showChatbotNotification() {
+            // Create notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: linear-gradient(135deg, #10B981, #059669);
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+                z-index: 1001;
+                animation: slideInDown 0.5s ease;
+                cursor: pointer;
+                max-width: 300px;
+            `;
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.5rem;">🤖</span>
+                    <div>
+                        <div style="font-weight: 700; margin-bottom: 0.25rem;">Meeting Assistant Ready!</div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">Click to chat about your meeting</div>
+                    </div>
+                </div>
+            `;
+            
+            notification.onclick = function() {
+                toggleChatbot();
+                notification.remove();
+            };
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 8 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideInDown 0.5s ease reverse';
+                    setTimeout(() => notification.remove(), 500);
+                }
+            }, 8000);
+        }
+
+        // Add CSS animation for notification
+        const notificationStyle = document.createElement('style');
+        notificationStyle.textContent = `
+            @keyframes slideInDown {
+                from {
+                    transform: translateY(-100px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(notificationStyle);
     </script>
 </body>
 

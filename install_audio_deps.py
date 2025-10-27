@@ -59,9 +59,13 @@ def main():
     print("✅ WebSocket real-time updates")
     print("✅ Dual transcription engines (Faster-Whisper + AssemblyAI)")
     print("✅ Cloud and local processing options")
+    print("✅ NumPy compatibility fix for system audio")
     
     print("\nTo start the application:")
     print("python app_meet.py")
+    
+    print("\nIf you encounter system audio issues:")
+    print("python fix_numpy_compatibility.py")
 
 if __name__ == "__main__":
     main()

@@ -2,7 +2,7 @@ flask
 flask-socketio
 python-dotenv
 pyaudio
-numpy
+numpy>=1.19.0,<1.20.0  # Compatible with soundcard library
 faster-whisper
 soundcard
 requests

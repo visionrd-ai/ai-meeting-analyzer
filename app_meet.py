@@ -54,6 +54,8 @@ app_state = {
     'analysis_start_time': None,  # Track when analysis started
     'audio_source': 'mic',  # 'mic', 'system', or 'both'
     'transcription_engine': 'faster_whisper',  # 'faster_whisper' or 'assemblyai'
+    'chatbot': None,  # Meeting chatbot instance
+    'chat_locked': True,  # Chat is locked by default and during recording
     'chat_history': [],  # For future chat features
     'first_recording_done': False,  # To track first recording completion
     'chat_instance': None  # To hold MeetingChatGrok instance
@@ -235,6 +237,9 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic', t
         # Clear previous session data
         clear_storage()
         
+        # Lock chat when recording starts
+        app_state['chat_locked'] = True
+        
         app_state['analysis_mode'] = mode
         app_state['words_threshold'] = words_threshold
         app_state['audio_source'] = audio_source
@@ -364,11 +369,20 @@ def stop_recording():
                         app_state['first_recording_done'] = True
                     print("✅ Final summary generated")
                     
+                    # Unlock chat now that final analysis is complete
+                    app_state['chat_locked'] = False
+                    
                     # Emit final analysis complete event
                     socketio.emit('final_analysis_complete', {
                         'analysis': app_state['final_summary'],
                         'is_final': True,
                         'timestamp': datetime.now().strftime("%H:%M:%S")
+                    })
+                    
+                    # Emit chat unlock event
+                    socketio.emit('chat_unlocked', {
+                        'timestamp': datetime.now().strftime("%H:%M:%S"),
+                        'message': 'Chat is now available! Ask me about your meeting.'
                     })
                 else:
                     print("No API key for final summary")
@@ -714,6 +728,8 @@ def clear_data_route():
         app_state['final_summary'] = None
         app_state['current_analysis'] = None
         app_state['is_analyzing'] = False
+        app_state['chat_locked'] = True  # Lock chat when data is cleared
+        app_state['chatbot'] = None  # Reset chatbot instance
         return jsonify({
             "success": True, 
             "message": "ðŸ—‘ï¸ All data cleared successfully!"
@@ -766,6 +782,150 @@ def export_summary():
             'words_threshold': app_state['words_threshold']
         })
     return jsonify({'error': 'No summary available'}), 404
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_meeting():
+    """Chat with the meeting using Grok AI."""
+    try:
+        # Check if chat is locked
+        if app_state.get('chat_locked', True):
+            if app_state.get('is_recording', False):
+                return jsonify({
+                    'success': False,
+                    'error': 'Chat is locked during recording. Please stop recording to unlock chat.',
+                    'locked': True,
+                    'reason': 'recording'
+                }), 423  # HTTP 423 Locked
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Chat is locked. Please complete a recording session first.',
+                    'locked': True,
+                    'reason': 'no_data'
+                }), 423  # HTTP 423 Locked
+        
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({
+                'success': False,
+                'error': 'Message is required'
+            }), 400
+        
+        # Get current transcript and analysis
+        segments = load_transcripts()
+        transcript_text = " ".join(segments) if segments else ""
+        current_analysis = app_state.get('final_summary') or app_state.get('current_analysis')
+        
+        if not transcript_text and not current_analysis:
+            return jsonify({
+                'success': False,
+                'error': 'No meeting data available. Please start recording first.'
+            }), 400
+        
+        # Initialize or update chatbot
+        xai_key = os.getenv("XAI_API_KEY")
+        if not xai_key:
+            return jsonify({
+                'success': False,
+                'error': 'XAI API key not configured'
+            }), 500
+        
+        # Create or update chatbot instance
+        if not app_state['chatbot']:
+            app_state['chatbot'] = MeetingChatGrok(
+                api_key_grok=xai_key,
+                latest_transcript=transcript_text,
+                latest_analysis=str(current_analysis) if current_analysis else ""
+            )
+        else:
+            # Update chatbot with latest data
+            app_state['chatbot'].reset_chat(
+                transcript=transcript_text,
+                analysis=str(current_analysis) if current_analysis else ""
+            )
+        
+        # Get response from chatbot
+        response = app_state['chatbot'].send_chat(user_message)
+        
+        return jsonify({
+            'success': True,
+            'response': response,
+            'timestamp': datetime.now().strftime("%H:%M:%S")
+        })
+        
+    except Exception as e:
+        print(f"Chat error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Chat error: {str(e)}'
+        }), 500
+
+@app.route('/api/chat/reset', methods=['POST'])
+def reset_chat():
+    """Reset the chat history."""
+    try:
+        if app_state['chatbot']:
+            segments = load_transcripts()
+            transcript_text = " ".join(segments) if segments else ""
+            current_analysis = app_state.get('final_summary') or app_state.get('current_analysis')
+            
+            app_state['chatbot'].reset_chat(
+                transcript=transcript_text,
+                analysis=str(current_analysis) if current_analysis else ""
+            )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Chat history reset successfully'
+        })
+        
+    except Exception as e:
+        print(f"Chat reset error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Reset error: {str(e)}'
+        }), 500
+
+@app.route('/api/chat/status')
+def get_chat_status():
+    """Get current chat lock status."""
+    try:
+        is_locked = app_state.get('chat_locked', True)
+        is_recording = app_state.get('is_recording', False)
+        has_data = bool(load_transcripts() or app_state.get('final_summary') or app_state.get('current_analysis'))
+        
+        if is_locked:
+            if is_recording:
+                reason = 'recording'
+                message = 'Chat is locked during recording. Stop recording to unlock.'
+            else:
+                reason = 'no_data'
+                message = 'Chat is locked. Complete a recording session to unlock.'
+        else:
+            reason = None
+            message = 'Chat is available! Ask me about your meeting.'
+        
+        return jsonify({
+            'locked': is_locked,
+            'is_recording': is_recording,
+            'has_data': has_data,
+            'reason': reason,
+            'message': message,
+            'timestamp': datetime.now().strftime("%H:%M:%S")
+        })
+        
+    except Exception as e:
+        print(f"Chat status error: {e}")
+        return jsonify({
+            'locked': True,
+            'reason': 'error',
+            'message': 'Unable to determine chat status',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
@@ -848,9 +1008,7 @@ def handle_connect():
         'session_id': app_state['recording_session_id'],
         'analysis_mode': app_state['analysis_mode'],
         'audio_source': app_state['audio_source'],
-        'first_recording_done': app_state['first_recording_done'],  
-        'current_analysis': app_state['current_analysis'],
-        'chat_history': app_state['chat_history'],
+        'chat_locked': app_state.get('chat_locked', True),
         **metrics
     })
 
@@ -871,8 +1029,7 @@ def handle_status_request():
         'audio_source': app_state['audio_source'],
         'current_analysis': app_state['current_analysis'],
         'final_summary': app_state['final_summary'],
-        'first_recording_done': app_state['first_recording_done'],
-        'chat_history': app_state['chat_history'],
+        'chat_locked': app_state.get('chat_locked', True),
         **metrics
     })
 
@@ -890,6 +1047,6 @@ if __name__ == '__main__':
         app,
         debug=True,
         host='0.0.0.0',
-        port=6000,
-        allow_unsafe_werkzeug=True
+        port=5000,
+       
     )
