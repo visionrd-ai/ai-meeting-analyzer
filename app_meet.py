@@ -55,10 +55,12 @@ app_state = {
     'audio_source': 'mic',  # 'mic', 'system', or 'both'
     'transcription_engine': 'faster_whisper',  # 'faster_whisper' or 'assemblyai'
     'chatbot': None,  # Meeting chatbot instance
-    'chat_locked': True,  # Chat is locked by default and during recording
+    'chat_locked': False,  # Chat is always available (removed lock system)
     'chat_history': [],  # For future chat features
     'first_recording_done': False,  # To track first recording completion
-    'chat_instance': None  # To hold MeetingChatGrok instance
+    'chat_instance': None,  # To hold MeetingChatGrok instance
+    'sent_questions': set(),  # Track sent proactive questions to avoid duplicates
+    'question_index': 0  # Index for rotating through questions
 }
 
 # ================================================================
@@ -201,6 +203,9 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
                         'is_final': False,
                         'timestamp': datetime.now().strftime("%H:%M:%S")
                     })
+                    
+                    # Send proactive clarifying questions during recording
+                    send_proactive_clarifying_questions(analysis)
             except Exception as e:
                 print(f"Error updating live analysis: {e}")
         elif app_state['is_recording'] and app_state['summarizer']:
@@ -237,14 +242,16 @@ def start_recording(mode='automatic', words_threshold=200, audio_source='mic', t
         # Clear previous session data
         clear_storage()
         
-        # Lock chat when recording starts
-        app_state['chat_locked'] = True
+        # Chat is now always available (removed lock)
+        app_state['chat_locked'] = False
         
         app_state['analysis_mode'] = mode
         app_state['words_threshold'] = words_threshold
         app_state['audio_source'] = audio_source
         app_state['transcription_engine'] = transcription_engine
         app_state['chat_history'] = []
+        app_state['sent_questions'] = set()  # Reset sent questions for new session
+        app_state['question_index'] = 0
         
         # Initialize AI components with appropriate settings
         print(f"Initializing AI components in {mode} mode with {audio_source} audio source...")
@@ -369,7 +376,7 @@ def stop_recording():
                         app_state['first_recording_done'] = True
                     print("✅ Final summary generated")
                     
-                    # Unlock chat now that final analysis is complete
+                    # Chat remains unlocked (removed lock system)
                     app_state['chat_locked'] = False
                     
                     # Emit final analysis complete event
@@ -481,6 +488,9 @@ def trigger_manual_analysis():
                     'generation_time': elapsed,
                     'timestamp': datetime.now().strftime("%H:%M:%S")
                 })
+                
+                # Send proactive clarifying questions for manual analysis too
+                send_proactive_clarifying_questions(analysis)
         except Exception as e:
             print(f"Error in manual analysis: {e}")
             import traceback
@@ -545,6 +555,50 @@ def calculate_metrics():
         'segments_count': len(segments),
         'full_text': full_text
     }
+
+def send_proactive_clarifying_questions(analysis):
+    """Send proactive clarifying questions to the chatbot during recording."""
+    try:
+        if not app_state['is_recording']:
+            return
+            
+        clarifying_questions = analysis.get('clarifying_questions', [])
+        if not clarifying_questions:
+            return
+        
+        # Find a question that hasn't been sent yet
+        unsent_questions = [q for q in clarifying_questions if q not in app_state['sent_questions']]
+        
+        if not unsent_questions:
+            # If all questions have been sent, reset and start over with new questions
+            app_state['sent_questions'].clear()
+            unsent_questions = clarifying_questions
+        
+        # Select question based on rotation index
+        question_index = app_state['question_index'] % len(unsent_questions)
+        question = unsent_questions[question_index]
+        
+        # Mark question as sent and update index
+        app_state['sent_questions'].add(question)
+        app_state['question_index'] += 1
+        
+        # Emit proactive question to frontend
+        socketio.emit('proactive_question', {
+            'question': question,
+            'timestamp': datetime.now().strftime("%H:%M:%S"),
+            'analysis_context': {
+                'word_count': len(" ".join(load_transcripts()).split()),
+                'issues_count': len(analysis.get('potential_issues', [])),
+                'recommendations_count': len(analysis.get('recommendations', [])),
+                'question_number': len(app_state['sent_questions']),
+                'total_questions': len(clarifying_questions)
+            }
+        })
+        
+        print(f"🤖 Proactive question #{len(app_state['sent_questions'])} sent: {question[:50]}...")
+        
+    except Exception as e:
+        print(f"Error sending proactive question: {e}")
 
 def perform_chat(user_message: str) -> str:
     """Handle chat interactions (future feature)."""
@@ -728,7 +782,7 @@ def clear_data_route():
         app_state['final_summary'] = None
         app_state['current_analysis'] = None
         app_state['is_analyzing'] = False
-        app_state['chat_locked'] = True  # Lock chat when data is cleared
+        app_state['chat_locked'] = False  # Chat remains available (removed lock)
         app_state['chatbot'] = None  # Reset chatbot instance
         return jsonify({
             "success": True, 
@@ -787,22 +841,7 @@ def export_summary():
 def chat_with_meeting():
     """Chat with the meeting using Grok AI."""
     try:
-        # Check if chat is locked
-        if app_state.get('chat_locked', True):
-            if app_state.get('is_recording', False):
-                return jsonify({
-                    'success': False,
-                    'error': 'Chat is locked during recording. Please stop recording to unlock chat.',
-                    'locked': True,
-                    'reason': 'recording'
-                }), 423  # HTTP 423 Locked
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Chat is locked. Please complete a recording session first.',
-                    'locked': True,
-                    'reason': 'no_data'
-                }), 423  # HTTP 423 Locked
+        # Chat is now always available (removed lock system)
         
         data = request.get_json()
         user_message = data.get('message', '').strip()
@@ -819,10 +858,12 @@ def chat_with_meeting():
         current_analysis = app_state.get('final_summary') or app_state.get('current_analysis')
         
         if not transcript_text and not current_analysis:
+            # Provide a helpful response even without data
             return jsonify({
-                'success': False,
-                'error': 'No meeting data available. Please start recording first.'
-            }), 400
+                'success': True,
+                'response': "I'm ready to help! I don't have any meeting data yet, but you can start recording and I'll analyze your discussion in real-time. Once you have some transcript data, I can help you with insights, summaries, and answer questions about your meeting.",
+                'timestamp': datetime.now().strftime("%H:%M:%S")
+            })
         
         # Initialize or update chatbot
         xai_key = os.getenv("XAI_API_KEY")
@@ -837,13 +878,13 @@ def chat_with_meeting():
             app_state['chatbot'] = MeetingChatGrok(
                 api_key_grok=xai_key,
                 latest_transcript=transcript_text,
-                latest_analysis=str(current_analysis) if current_analysis else ""
+                latest_analysis=current_analysis if current_analysis else ""
             )
         else:
             # Update chatbot with latest data
             app_state['chatbot'].reset_chat(
                 transcript=transcript_text,
-                analysis=str(current_analysis) if current_analysis else ""
+                analysis=current_analysis if current_analysis else ""
             )
         
         # Get response from chatbot
@@ -875,7 +916,7 @@ def reset_chat():
             
             app_state['chatbot'].reset_chat(
                 transcript=transcript_text,
-                analysis=str(current_analysis) if current_analysis else ""
+                analysis=current_analysis if current_analysis else ""
             )
         
         return jsonify({
@@ -894,20 +935,15 @@ def reset_chat():
 def get_chat_status():
     """Get current chat lock status."""
     try:
-        is_locked = app_state.get('chat_locked', True)
+        is_locked = False  # Chat is always available now
         is_recording = app_state.get('is_recording', False)
         has_data = bool(load_transcripts() or app_state.get('final_summary') or app_state.get('current_analysis'))
         
-        if is_locked:
-            if is_recording:
-                reason = 'recording'
-                message = 'Chat is locked during recording. Stop recording to unlock.'
-            else:
-                reason = 'no_data'
-                message = 'Chat is locked. Complete a recording session to unlock.'
-        else:
-            reason = None
+        reason = None
+        if has_data:
             message = 'Chat is available! Ask me about your meeting.'
+        else:
+            message = 'Chat is available! Start recording to have data to discuss.'
         
         return jsonify({
             'locked': is_locked,
@@ -927,24 +963,7 @@ def get_chat_status():
             'error': str(e)
         }), 500
 
-@app.route('/api/chat', methods=['POST'])
-def chat_api():
-    """API endpoint for chat interactions (future feature)."""
-    try:
-        data = request.get_json() or {}
-        user_message = data.get('message', '').strip()
 
-        response = perform_chat(user_message)
-        return jsonify({
-            "success": True,
-            "response": response
-        })
-    except Exception as e:
-        print(f"Error in chat API: {e}")
-        return jsonify({
-            "success": False,
-            "response": "Error processing chat message."
-        })
 
 @app.errorhandler(404)
 def not_found(error):

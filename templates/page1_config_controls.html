@@ -644,8 +644,7 @@
                 {% if is_recording %}
                 <button class="control-button btn-analyze" onclick="triggerManualAnalysis()" id="analyze-btn" {% if is_analyzing %}disabled{% endif %}>
                     {% if is_analyzing %}
-                    <span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span>
-                    Analyzing...
+                    🧠 Analyzing...
                     {% else %}
                     🎯 Analyze Now
                     {% endif %}
@@ -705,6 +704,7 @@
     <script>
         // Global state
         let isRecording = {{ 'true' if is_recording else 'false' }};
+        let isAnalyzing = {{ 'true' if is_analyzing else 'false' }};
         let selectedWordsThreshold = 200;
         let selectedMode = 'automatic';
         let selectedAudioSource = 'mic';
@@ -725,6 +725,7 @@
             socket.on('status_update', function(data) {
                 console.log('📊 Status update:', data);
                 isRecording = data.is_recording;
+                isAnalyzing = data.is_analyzing;
                 updateRecordingStatus();
             });
             
@@ -741,6 +742,46 @@
                 isRecording = false;
                 updateRecordingStatus();
             });
+            
+            // Handle analysis start
+            socket.on('analysis_start', function(data) {
+                console.log('🧠 Analysis started');
+                isAnalyzing = true;
+                updateRecordingStatus();
+            });
+            
+            // Handle analysis complete
+            socket.on('analysis_complete', function(data) {
+                console.log('✅ Analysis complete');
+                isAnalyzing = false;
+                updateRecordingStatus();
+                showMessage('Analysis complete! Check the AI Analysis page for results.', 'success');
+            });
+            
+            // Handle analysis end
+            socket.on('analysis_end', function(data) {
+                console.log('⏹️ Analysis ended');
+                isAnalyzing = false;
+                updateRecordingStatus();
+            });
+            
+            // Handle final analysis start
+            socket.on('final_analysis_start', function(data) {
+                console.log('🎯 Final analysis started');
+                showMessage('Generating final analysis...', 'info');
+            });
+            
+            // Handle final analysis complete
+            socket.on('final_analysis_complete', function(data) {
+                console.log('🏁 Final analysis complete');
+                showMessage('Final analysis complete! Session ended.', 'success');
+            });
+            
+            // Handle proactive clarifying questions during recording
+            socket.on('proactive_question', function(data) {
+                console.log('❓ Proactive question received on page 1:', data.question);
+                showProactiveQuestionOnPage1(data);
+            });
         }
 
         function updateRecordingStatus() {
@@ -753,6 +794,17 @@
             if (startBtn) startBtn.disabled = isRecording;
             if (stopBtn) stopBtn.disabled = !isRecording;
             if (clearBtn) clearBtn.disabled = isRecording;
+            
+            // Update analyze button based on analysis status
+            if (analyzeBtn) {
+                if (isAnalyzing) {
+                    analyzeBtn.innerHTML = '🧠 Analyzing...';
+                    analyzeBtn.disabled = true;
+                } else {
+                    analyzeBtn.innerHTML = '🎯 Analyze Now';
+                    analyzeBtn.disabled = !isRecording; // Only enabled when recording
+                }
+            }
             
             // Update recording status display
             const recordingStatus = document.querySelector('.recording-status');
@@ -842,7 +894,7 @@
         async function startRecording() {
             const button = event.target;
             const originalText = button.innerHTML;
-            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Starting...';
+            button.innerHTML = '🔄 Starting...';
             button.disabled = true;
 
             try {
@@ -884,7 +936,7 @@
         async function stopRecording() {
             const button = event.target;
             const originalText = button.innerHTML;
-            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Stopping...';
+            button.innerHTML = '⏸️ Stopping...';
             button.disabled = true;
 
             try {
@@ -917,7 +969,7 @@
             if (!button || button.disabled) return;
 
             const originalText = button.innerHTML;
-            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Analyzing...';
+            button.innerHTML = '🧠 Analyzing...';
             button.disabled = true;
 
             try {
@@ -931,18 +983,17 @@
 
                 if (result.success) {
                     showMessage('Analysis triggered! Check the AI Analysis page for results.', 'success');
-                    setTimeout(() => {
-                        button.innerHTML = originalText;
-                        button.disabled = false;
-                    }, 3000);
+                    // Don't reset button here - socket events will handle it
                 } else {
                     showMessage(result.message, 'error');
+                    // Reset button on error
                     button.innerHTML = originalText;
                     button.disabled = false;
                 }
             } catch (error) {
                 console.error('Trigger analysis error:', error);
                 showMessage('Error triggering analysis: ' + error.message, 'error');
+                // Reset button on error
                 button.innerHTML = originalText;
                 button.disabled = false;
             }
@@ -955,7 +1006,7 @@
 
             const button = event.target;
             const originalText = button.innerHTML;
-            button.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></span> Clearing...';
+            button.innerHTML = '🗑️ Clearing...';
             button.disabled = true;
 
             try {
@@ -983,11 +1034,69 @@
             }
         }
 
-        // Add CSS for loading animation
+        function showProactiveQuestionOnPage1(data) {
+            // Create a prominent notification for proactive questions on page 1
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: linear-gradient(135deg, #F59E0B, #D97706);
+                color: white;
+                padding: 1.5rem;
+                border-radius: 16px;
+                box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+                z-index: 1001;
+                animation: slideInDown 0.5s ease;
+                cursor: pointer;
+                max-width: 400px;
+                border-left: 4px solid #FBBF24;
+            `;
+
+            const shortQuestion = data.question.length > 70 ? data.question.substring(0, 70) + '...' : data.question;
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                    <span style="font-size: 1.8rem; margin-top: 0.2rem;">🤖❓</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 1.1rem;">AI Question During Recording</div>
+                        <div style="font-size: 0.95rem; line-height: 1.4; margin-bottom: 0.75rem;">${shortQuestion}</div>
+                        <div style="font-size: 0.8rem; opacity: 0.9;">
+                            📊 ${data.analysis_context.word_count} words • Question ${data.analysis_context.question_number}/${data.analysis_context.total_questions}
+                        </div>
+                        <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.5rem;">Click to go to Analysis page and respond</div>
+                    </div>
+                </div>
+            `;
+
+            notification.onclick = function () {
+                // Navigate to analysis page
+                window.location.href = '/analysis';
+            };
+
+            document.body.appendChild(notification);
+
+            // Auto-remove after 12 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideInDown 0.5s ease reverse';
+                    setTimeout(() => notification.remove(), 500);
+                }
+            }, 12000);
+        }
+
+        // Add CSS animation for notifications
         const style = document.createElement('style');
         style.textContent = `
-            @keyframes spin {
-                to { transform: rotate(360deg); }
+            @keyframes slideInDown {
+                from {
+                    transform: translateY(-100px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
             }
         `;
         document.head.appendChild(style);

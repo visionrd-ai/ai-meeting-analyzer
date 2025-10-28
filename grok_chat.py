@@ -104,7 +104,18 @@ class MeetingChatGrok:
 
   def _inject_meeting_context(self, system_prompt: str) -> str:
       transcript = (self.full_transcript or "").strip()
-      analysis = (self.latest_analysis or "").strip()
+      # Handle both string and dict analysis
+      if isinstance(self.latest_analysis, dict):
+          # Convert dict to formatted string
+          analysis_parts = []
+          for key, value in self.latest_analysis.items():
+              if isinstance(value, list):
+                  analysis_parts.append(f"{key.replace('_', ' ').title()}:\n" + "\n".join(f"- {item}" for item in value))
+              else:
+                  analysis_parts.append(f"{key.replace('_', ' ').title()}: {value}")
+          analysis = "\n\n".join(analysis_parts)
+      else:
+          analysis = (self.latest_analysis or "").strip()
 
       template = system_prompt or ""
       injected = template

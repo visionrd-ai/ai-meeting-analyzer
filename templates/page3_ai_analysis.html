@@ -340,26 +340,7 @@
             border-left: 4px solid var(--primary);
         }
 
-        .refresh-button {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            background: var(--gradient-primary);
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 0.75rem 1.5rem;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: var(--shadow-lg);
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
 
-        .refresh-button:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-xl);
-        }
 
         /* Chatbot Styles */
         .chatbot-container {
@@ -596,6 +577,22 @@
             color: var(--primary);
         }
 
+        .chat-suggestions-persistent {
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .chat-locked {
             text-align: center;
             padding: 2rem 1rem;
@@ -633,8 +630,15 @@
         }
 
         @keyframes pulse-locked {
-            0%, 100% { opacity: 0.7; }
-            50% { opacity: 0.4; }
+
+            0%,
+            100% {
+                opacity: 0.7;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
         }
 
         @media (max-width: 768px) {
@@ -649,16 +653,16 @@
             .app-header h1 {
                 font-size: 1.5rem;
             }
-            
-            .navigation-links { 
-                flex-direction: column; 
-                align-items: center; 
+
+            .navigation-links {
+                flex-direction: column;
+                align-items: center;
             }
-            
-            .analysis-grid { 
-                grid-template-columns: 1fr; 
+
+            .analysis-grid {
+                grid-template-columns: 1fr;
             }
-            
+
             /* Mobile chatbot adjustments */
             .chatbot-container {
                 width: calc(100vw - 2rem);
@@ -669,21 +673,18 @@
                 left: 1rem;
                 border-radius: 15px;
             }
-            
+
             .chatbot-messages {
                 max-height: none;
                 min-height: calc(100vh - 200px);
             }
-            
+
             .chatbot-toggle {
                 bottom: 1rem;
                 right: 1rem;
             }
-            
-            .refresh-button {
-                bottom: 5rem;
-                right: 1rem;
-            }
+
+
 
             .navigation-links {
                 flex-direction: column;
@@ -846,12 +847,7 @@
             {% endif %}
         </div>
 
-        <!-- Refresh Button -->
-        {% if is_recording or analysis %}
-        <button class="refresh-button" onclick="refreshAnalysis()">
-            🔄 Refresh
-        </button>
-        {% endif %}
+
 
         <!-- Chatbot Toggle Button -->
         <button class="chatbot-toggle" id="chatbotToggle" onclick="toggleChatbot()">
@@ -864,13 +860,14 @@
                 <h3>🤖 Meeting Assistant</h3>
                 <button class="chatbot-close" onclick="toggleChatbot()">×</button>
             </div>
-            
+
             <div class="chatbot-messages" id="chatbotMessages">
                 <!-- This will be populated by JavaScript based on lock status -->
             </div>
-            
+
             <div class="chatbot-input">
-                <input type="text" id="chatInput" placeholder="Ask about your meeting..." onkeypress="handleChatKeyPress(event)">
+                <input type="text" id="chatInput" placeholder="Ask about your meeting..."
+                    onkeypress="handleChatKeyPress(event)">
                 <button class="chatbot-send" id="chatSendBtn" onclick="sendChatMessage()">
                     ➤
                 </button>
@@ -888,54 +885,60 @@
         // Initialize SocketIO connection
         function initializeSocket() {
             socket = io();
-            
+
             // Handle connection
-            socket.on('connect', function() {
+            socket.on('connect', function () {
                 console.log('🔗 Connected to server');
                 socket.emit('request_status');
             });
-            
+
             // Handle disconnection
-            socket.on('disconnect', function() {
+            socket.on('disconnect', function () {
                 console.log('❌ Disconnected from server');
             });
-            
+
             // Handle analysis start
-            socket.on('analysis_start', function(data) {
+            socket.on('analysis_start', function (data) {
                 console.log('🧠 Analysis started');
                 startAnalysisLoading();
             });
-            
+
             // Handle analysis updates
-            socket.on('analysis_update', function(data) {
+            socket.on('analysis_update', function (data) {
                 console.log('📊 Analysis update received');
                 if (data.analysis) {
                     updateAnalysisContent(data.analysis);
+                    // Update chat suggestions with new clarifying questions
+                    updateChatSuggestions(data.analysis.clarifying_questions || []);
                 }
             });
-            
+
             // Handle analysis complete
-            socket.on('analysis_complete', function(data) {
+            socket.on('analysis_complete', function (data) {
                 console.log('✅ Analysis complete');
                 stopAnalysisLoading(data.generation_time);
                 if (data.analysis) {
                     updateAnalysisContent(data.analysis);
+                    // Update chat suggestions with clarifying questions
+                    updateChatSuggestions(data.analysis.clarifying_questions || []);
                 }
             });
-            
+
             // Handle final analysis start
-            socket.on('final_analysis_start', function(data) {
+            socket.on('final_analysis_start', function (data) {
                 console.log('🎯 Final analysis started');
                 startAnalysisLoading();
             });
-            
+
             // Handle final analysis complete
-            socket.on('final_analysis_complete', function(data) {
+            socket.on('final_analysis_complete', function (data) {
                 console.log('🏁 Final analysis complete');
                 stopAnalysisLoading();
                 if (data.analysis) {
                     updateAnalysisContent(data.analysis);
-                    
+                    // Update chat suggestions with clarifying questions
+                    updateChatSuggestions(data.analysis.clarifying_questions || []);
+
                     // Show final analysis badge
                     const analysisContent = document.getElementById('analysis-content');
                     if (analysisContent) {
@@ -944,42 +947,49 @@
                     }
                 }
             });
-            
+
             // Handle analysis end
-            socket.on('analysis_end', function(data) {
+            socket.on('analysis_end', function (data) {
                 console.log('⏹️ Analysis ended');
                 stopAnalysisLoading();
+                isAnalyzing = false;
             });
-            
+
             // Handle session complete
-            socket.on('session_complete', function(data) {
+            socket.on('session_complete', function (data) {
                 console.log('🎉 Session complete');
                 isRecording = false;
                 isAnalyzing = false;
-                
+
                 // Show chatbot availability notification
                 showChatbotNotification();
             });
-            
+
             // Handle status updates
-            socket.on('status_update', function(data) {
+            socket.on('status_update', function (data) {
                 console.log('📊 Status update:', data);
                 isRecording = data.is_recording;
                 isAnalyzing = data.is_analyzing;
-                
+
                 // Update chat lock status
                 updateChatLockStatus(data.chat_locked, data.is_recording);
-                
+
                 if (data.current_analysis && !isAnalyzing) {
                     updateAnalysisContent(data.current_analysis);
                 }
             });
-            
+
             // Handle chat unlock event
-            socket.on('chat_unlocked', function(data) {
+            socket.on('chat_unlocked', function (data) {
                 console.log('🔓 Chat unlocked:', data.message);
                 updateChatLockStatus(false, false);
                 showChatUnlockedNotification(data.message);
+            });
+
+            // Handle proactive clarifying questions during recording
+            socket.on('proactive_question', function (data) {
+                console.log('❓ Proactive question received:', data.question);
+                handleProactiveQuestion(data);
             });
         }
 
@@ -1132,40 +1142,7 @@
             return div.innerHTML;
         }
 
-        async function refreshAnalysis() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
 
-                if (data.is_analyzing && !isAnalyzing) {
-                    startAnalysisLoading();
-                } else if (!data.is_analyzing && isAnalyzing) {
-                    stopAnalysisLoading();
-                }
-
-                if (data.analysis && !data.is_analyzing) {
-                    updateAnalysisContent(data.analysis);
-                }
-
-                isAnalyzing = data.is_analyzing;
-                isRecording = data.is_recording;
-
-            } catch (error) {
-                console.error('Error refreshing analysis:', error);
-            }
-        }
-
-        function startAutoRefresh() {
-            if (isRecording || isAnalyzing) {
-                autoRefreshInterval = setInterval(refreshAnalysis, 3000);
-            }
-        }
-
-        function stopAutoRefresh() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-        }
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function () {
@@ -1190,28 +1167,27 @@
 
         let chatHistory = [];
         let isChatLoading = false;
-        let isChatLocked = true; // Chat starts locked
+        let isChatLocked = false; // Chat is always available (removed lock system)
+        let currentClarifyingQuestions = []; // Store current clarifying questions for suggestions
 
         function toggleChatbot() {
             const container = document.getElementById('chatbotContainer');
             const toggle = document.getElementById('chatbotToggle');
-            
+
             if (container.classList.contains('open')) {
                 container.classList.remove('open');
                 toggle.classList.remove('hidden');
             } else {
                 container.classList.add('open');
                 toggle.classList.add('hidden');
-                
+
                 // Update chat content based on lock status
                 updateChatContent();
-                
-                // Focus on input when opening (only if unlocked)
-                if (!isChatLocked) {
-                    setTimeout(() => {
-                        document.getElementById('chatInput').focus();
-                    }, 100);
-                }
+
+                // Focus on input when opening
+                setTimeout(() => {
+                    document.getElementById('chatInput').focus();
+                }, 100);
             }
         }
 
@@ -1223,35 +1199,30 @@
         }
 
         function sendQuickMessage(message) {
-            if (isChatLocked) {
-                return;
-            }
+            // Chat is always available now
             document.getElementById('chatInput').value = message;
             sendChatMessage();
         }
 
         async function sendChatMessage() {
-            // Check if chat is locked
-            if (isChatLocked) {
-                return;
-            }
-            
+            // Chat is always available now
+
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
-            
+
             if (!message || isChatLoading) return;
-            
+
             // Clear input
             input.value = '';
-            
+
             // Add user message to chat
             addChatMessage(message, 'user');
-            
+
             // Show loading
             isChatLoading = true;
             const loadingId = addChatLoading();
             updateSendButton(true);
-            
+
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
@@ -1262,12 +1233,12 @@
                         message: message
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 // Remove loading message
                 removeChatLoading(loadingId);
-                
+
                 if (data.success) {
                     addChatMessage(data.response, 'assistant');
                 } else if (data.locked) {
@@ -1277,7 +1248,7 @@
                 } else {
                     addChatMessage(`Sorry, I encountered an error: ${data.error}`, 'assistant', true);
                 }
-                
+
             } catch (error) {
                 console.error('Chat error:', error);
                 removeChatLoading(loadingId);
@@ -1290,26 +1261,38 @@
 
         function addChatMessage(message, sender, isError = false) {
             const messagesContainer = document.getElementById('chatbotMessages');
+
+            // Remove existing suggestions before adding new message
+            const existingSuggestions = messagesContainer.querySelector('.chat-suggestions-persistent');
+            if (existingSuggestions) {
+                existingSuggestions.remove();
+            }
+
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${sender}`;
-            
+
             const bubble = document.createElement('div');
             bubble.className = `message-bubble ${sender}`;
             if (isError) bubble.style.background = '#FEE2E2';
             if (isError) bubble.style.color = '#991B1B';
             bubble.textContent = message;
-            
+
             const time = document.createElement('div');
             time.className = 'message-time';
-            time.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
+            time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
             messageDiv.appendChild(bubble);
             messageDiv.appendChild(time);
             messagesContainer.appendChild(messageDiv);
-            
+
+            // Add persistent suggestions after each assistant message
+            if (sender === 'assistant') {
+                addPersistentSuggestions();
+            }
+
             // Scroll to bottom
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
+
             // Store in history
             chatHistory.push({
                 message: message,
@@ -1318,20 +1301,61 @@
             });
         }
 
+        function addPersistentSuggestions() {
+            const messagesContainer = document.getElementById('chatbotMessages');
+
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'chat-suggestions-persistent';
+            suggestionsDiv.style.cssText = `
+                margin: 1rem 0;
+                padding: 1rem;
+                background: var(--bg-tertiary);
+                border-radius: 12px;
+                border: 1px solid var(--border-light);
+            `;
+
+            suggestionsDiv.innerHTML = `
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-weight: 600;">💡 Quick Questions:</div>
+                ${generatePersistentSuggestions()}
+            `;
+
+            messagesContainer.appendChild(suggestionsDiv);
+        }
+
+        function generatePersistentSuggestions() {
+            let suggestions = `
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <button class="chat-action-btn" onclick="sendQuickMessage('Can you elaborate on that?')" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">🔍 Elaborate</button>
+                    <button class="chat-action-btn" onclick="sendQuickMessage('What are the next steps?')" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">➡️ Next Steps</button>
+                    <button class="chat-action-btn" onclick="sendQuickMessage('Any concerns or risks?')" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">⚠️ Risks</button>
+            `;
+
+            // Add clarifying questions as suggestions
+            if (currentClarifyingQuestions && currentClarifyingQuestions.length > 0) {
+                currentClarifyingQuestions.slice(0, 2).forEach((question, index) => {
+                    const shortQuestion = question.length > 30 ? question.substring(0, 30) + '...' : question;
+                    suggestions += `<button class="chat-action-btn" onclick="sendQuickMessage('${escapeQuotes(question)}')" title="${escapeQuotes(question)}" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">❓ ${shortQuestion}</button>`;
+                });
+            }
+
+            suggestions += `</div>`;
+            return suggestions;
+        }
+
         function addChatLoading() {
             const messagesContainer = document.getElementById('chatbotMessages');
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'chat-message assistant';
             loadingDiv.id = 'chat-loading-' + Date.now();
-            
+
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble assistant';
             bubble.innerHTML = '<div class="chat-loading"><div class="spinner"></div>Thinking...</div>';
-            
+
             loadingDiv.appendChild(bubble);
             messagesContainer.appendChild(loadingDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
+
             return loadingDiv.id;
         }
 
@@ -1353,9 +1377,9 @@
                 const response = await fetch('/api/chat/reset', {
                     method: 'POST'
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Clear chat UI
                     const messagesContainer = document.getElementById('chatbotMessages');
@@ -1380,28 +1404,20 @@
         }
 
         function updateChatLockStatus(locked, isRecording) {
-            isChatLocked = locked;
+            // Chat is always available now (removed lock system)
+            isChatLocked = false;
             const toggle = document.getElementById('chatbotToggle');
             const input = document.querySelector('.chatbot-input');
-            
-            // Update toggle button appearance
-            if (locked) {
-                toggle.classList.add('locked');
-                toggle.title = isRecording ? 'Chat locked during recording' : 'Chat locked - complete a recording first';
-            } else {
-                toggle.classList.remove('locked');
-                toggle.title = 'Chat with Meeting Assistant';
-            }
-            
-            // Update input area
+
+            // Always show as available
+            toggle.classList.remove('locked');
+            toggle.title = 'Chat with Meeting Assistant';
+
+            // Always enable input
             if (input) {
-                if (locked) {
-                    input.classList.add('locked');
-                } else {
-                    input.classList.remove('locked');
-                }
+                input.classList.remove('locked');
             }
-            
+
             // Update chat content if chatbot is open
             const container = document.getElementById('chatbotContainer');
             if (container && container.classList.contains('open')) {
@@ -1411,45 +1427,64 @@
 
         function updateChatContent() {
             const messagesContainer = document.getElementById('chatbotMessages');
-            
-            if (isChatLocked) {
-                // Show locked state
+
+            // Chat is always available now
+            if (chatHistory.length === 0) {
                 messagesContainer.innerHTML = `
-                    <div class="chat-locked">
-                        <div class="chat-locked-icon">🔒</div>
-                        <div class="chat-locked-title">Chat Locked</div>
-                        <div class="chat-locked-message">
-                            ${isRecording ? 
-                                'Chat is locked during recording. Stop recording to unlock and chat about your meeting.' : 
-                                'Chat is locked. Start and complete a recording session to unlock the meeting assistant.'
-                            }
-                        </div>
+                    <div class="chat-welcome">
+                        <strong>👋 Hello! I'm your Meeting Assistant</strong><br>
+                        I can help you analyze your meeting transcript and findings. Ask me about:
+                        <br><br>
+                        • Key decisions and action items<br>
+                        • Meeting participants and roles<br>
+                        • Technical discussions and recommendations<br>
+                        • Timeline and deadlines<br>
+                        • Any specific details from the meeting
                     </div>
+                    
+                    ${generateChatSuggestions()}
                 `;
-            } else {
-                // Show unlocked state with welcome message or existing chat
-                if (chatHistory.length === 0) {
-                    messagesContainer.innerHTML = `
-                        <div class="chat-welcome">
-                            <strong>👋 Hello! I'm your Meeting Assistant</strong><br>
-                            I can help you analyze your meeting transcript and findings. Ask me about:
-                            <br><br>
-                            • Key decisions and action items<br>
-                            • Meeting participants and roles<br>
-                            • Technical discussions and recommendations<br>
-                            • Timeline and deadlines<br>
-                            • Any specific details from the meeting
-                        </div>
-                        
-                        <div class="chat-actions">
-                            <button class="chat-action-btn" onclick="sendQuickMessage('Summarize the key decisions')">📋 Key Decisions</button>
-                            <button class="chat-action-btn" onclick="sendQuickMessage('What are the action items?')">✅ Action Items</button>
-                            <button class="chat-action-btn" onclick="sendQuickMessage('List the main participants')">👥 Participants</button>
-                        </div>
-                    `;
-                }
-                // If there's chat history, it will be preserved
             }
+            // If there's chat history, it will be preserved
+        }
+
+        function generateChatSuggestions() {
+            let suggestions = `
+                <div class="chat-actions">
+                    <button class="chat-action-btn" onclick="sendQuickMessage('Summarize the key decisions')">📋 Key Decisions</button>
+                    <button class="chat-action-btn" onclick="sendQuickMessage('What are the action items?')">✅ Action Items</button>
+                    <button class="chat-action-btn" onclick="sendQuickMessage('List the main participants')">👥 Participants</button>
+            `;
+
+            // Add clarifying questions as suggestions
+            if (currentClarifyingQuestions && currentClarifyingQuestions.length > 0) {
+                suggestions += `<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600;">💡 Clarifying Questions:</div>`;
+
+                currentClarifyingQuestions.slice(0, 3).forEach((question, index) => {
+                    const shortQuestion = question.length > 40 ? question.substring(0, 40) + '...' : question;
+                    suggestions += `<button class="chat-action-btn" onclick="sendQuickMessage('${escapeQuotes(question)}')" title="${escapeQuotes(question)}">❓ ${shortQuestion}</button>`;
+                });
+
+                suggestions += `</div>`;
+            }
+
+            suggestions += `</div>`;
+            return suggestions;
+        }
+
+        function updateChatSuggestions(clarifyingQuestions) {
+            currentClarifyingQuestions = clarifyingQuestions || [];
+
+            // Update suggestions if chat is open and no history
+            const container = document.getElementById('chatbotContainer');
+            if (container && container.classList.contains('open') && chatHistory.length === 0) {
+                updateChatContent();
+            }
+        }
+
+        function escapeQuotes(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
         function showChatUnlockedNotification(message) {
@@ -1469,7 +1504,7 @@
                 cursor: pointer;
                 max-width: 320px;
             `;
-            
+
             notification.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <span style="font-size: 1.5rem;">🔓</span>
@@ -1479,14 +1514,14 @@
                     </div>
                 </div>
             `;
-            
-            notification.onclick = function() {
+
+            notification.onclick = function () {
                 toggleChatbot();
                 notification.remove();
             };
-            
+
             document.body.appendChild(notification);
-            
+
             // Auto-remove after 10 seconds
             setTimeout(() => {
                 if (notification.parentNode) {
@@ -1497,10 +1532,10 @@
         }
 
         // Add reset button to chatbot header
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Initialize chat content
             updateChatContent();
-            
+
             const chatHeader = document.querySelector('.chatbot-header');
             if (chatHeader) {
                 const resetBtn = document.createElement('button');
@@ -1520,7 +1555,7 @@
                 resetBtn.onmouseover = () => resetBtn.style.background = 'rgba(255,255,255,0.2)';
                 resetBtn.onmouseout = () => resetBtn.style.background = 'none';
                 resetBtn.onclick = resetChatHistory;
-                
+
                 chatHeader.insertBefore(resetBtn, chatHeader.lastElementChild);
             }
         });
@@ -1542,7 +1577,7 @@
                 cursor: pointer;
                 max-width: 300px;
             `;
-            
+
             notification.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <span style="font-size: 1.5rem;">🤖</span>
@@ -1552,14 +1587,14 @@
                     </div>
                 </div>
             `;
-            
-            notification.onclick = function() {
+
+            notification.onclick = function () {
                 toggleChatbot();
                 notification.remove();
             };
-            
+
             document.body.appendChild(notification);
-            
+
             // Auto-remove after 8 seconds
             setTimeout(() => {
                 if (notification.parentNode) {
@@ -1567,6 +1602,79 @@
                     setTimeout(() => notification.remove(), 500);
                 }
             }, 8000);
+        }
+
+        function handleProactiveQuestion(data) {
+            // Show proactive question notification
+            showProactiveQuestionNotification(data.question, data.analysis_context);
+            
+            // Auto-open chatbot if not already open
+            const container = document.getElementById('chatbotContainer');
+            if (!container.classList.contains('open')) {
+                toggleChatbot();
+            }
+            
+            // Add the proactive question as an assistant message
+            addChatMessage(`I noticed some interesting points in your discussion. ${data.question}`, 'assistant');
+        }
+
+        function showProactiveQuestionNotification(question, context) {
+            // Create notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: linear-gradient(135deg, #F59E0B, #D97706);
+                color: white;
+                padding: 1.5rem;
+                border-radius: 16px;
+                box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+                z-index: 1001;
+                animation: slideInDown 0.5s ease;
+                cursor: pointer;
+                max-width: 400px;
+                border-left: 4px solid #FBBF24;
+            `;
+
+            const shortQuestion = question.length > 80 ? question.substring(0, 80) + '...' : question;
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                    <span style="font-size: 1.8rem; margin-top: 0.2rem;">🤖❓</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; margin-bottom: 0.5rem; font-size: 1.1rem;">AI has a question!</div>
+                        <div style="font-size: 0.95rem; line-height: 1.4; margin-bottom: 0.75rem;">${shortQuestion}</div>
+                        <div style="font-size: 0.8rem; opacity: 0.9;">
+                            📊 ${context.word_count} words analyzed • ${context.issues_count} issues • ${context.recommendations_count} recommendations
+                        </div>
+                        <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.25rem;">
+                            Question ${context.question_number} of ${context.total_questions}
+                        </div>
+                        <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.5rem;">Click to respond in chat</div>
+                    </div>
+                </div>
+            `;
+
+            notification.onclick = function () {
+                toggleChatbot();
+                notification.remove();
+                // Focus on chat input
+                setTimeout(() => {
+                    const chatInput = document.getElementById('chatInput');
+                    if (chatInput) chatInput.focus();
+                }, 300);
+            };
+
+            document.body.appendChild(notification);
+
+            // Auto-remove after 15 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideInDown 0.5s ease reverse';
+                    setTimeout(() => notification.remove(), 500);
+                }
+            }, 15000);
         }
 
         // Add CSS animation for notification
@@ -1587,14 +1695,4 @@
     </script>
 </body>
 
-</html>
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', function() {
-            if (socket) {
-                socket.disconnect();
-            }
-        });
-    </script>
-</body>
 </html>
