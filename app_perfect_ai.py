@@ -448,15 +448,8 @@ def stop_perfect_ai_recording():
                     
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
                     full_transcript = " ".join(segments)
-                    
+                    app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'])
                     # Initialize perfect AI chat
-                    if app_state['first_recording_done']:
-                        if not app_state['chat_instance']:
-                            app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'])
-                        else:
-                            app_state['chat_instance'].reset_chat(full_transcript, app_state['final_summary'])
-                    else:
-                        app_state['first_recording_done'] = True
                     
                     print("✅ Perfect AI final summary generated")
                     
@@ -1073,6 +1066,7 @@ def delete_recording(filename):
 def chat_with_ai():
     """Handle chat requests with the AI assistant."""
     try:
+        print("💬 Chat request received")
         data = request.get_json()
         message = data.get('message', '').strip()
         
@@ -1081,17 +1075,17 @@ def chat_with_ai():
                 'success': False,
                 'error': 'Message is required'
             })
-        
+        print(f"💬 User message: {message}")
         # Check if chat instance is available
         if not app_state.get('chat_instance'):
             return jsonify({
                 'success': False,
                 'error': 'Chat is not available yet. Please wait for the recording to complete.'
             })
-        
+        print("💬 Chat instance found, processing message...")
         # Get response from chat instance
         try:
-            response = app_state['chat_instance'].chat(message)
+            response = app_state['chat_instance'].send_chat(message)
             return jsonify({
                 'success': True,
                 'response': response,

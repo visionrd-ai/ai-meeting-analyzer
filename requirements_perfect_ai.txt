@@ -1,70 +1,54 @@
-# Perfect AI Meeting Analyzer - Enhanced Requirements
-# Advanced voice processing and noise cancellation dependencies
+# Perfect AI Meeting Analyzer - Py3.11 / Windows compatible
 
 # Core Flask and SocketIO
-flask>=2.3.0
-flask-socketio>=5.3.0
-python-dotenv>=1.0.0
+flask>=3.0.0
+flask-socketio>=5.5.0
+python-dotenv>=1.0.1
 
-# Audio Processing - Perfect AI Enhanced
-pyaudio>=0.2.11
-numpy>=1.19.0,<1.20.0  # Compatible with soundcard library
+# Numeric stack (Py3.11)
+numpy>=1.26.4,<2.0           # Py3.11-compatible; avoids NumPy 2.0 breakages with numba/others
+scipy>=1.11,<1.14            # SciPy versions that support Py3.11
+
+# Audio Processing
 soundcard>=0.4.2
-scipy>=1.9.0
-librosa>=0.10.0
+sounddevice>=0.4.6
+soundfile>=0.12.1
+resampy>=0.4.3
+librosa>=0.10.1
+pydub>=0.25.1
+audioread>=3.0.0
+ffmpeg-python>=0.2.0
+noisereduce>=3.0.2
 
-# Advanced Noise Reduction and Voice Processing
-noisereduce>=3.0.0
-webrtcvad>=2.0.10  # Voice Activity Detection
-spectral-subtraction>=1.0.0  # Advanced noise cancellation
-adaptive-filter>=0.2.0  # Adaptive filtering
-pydub>=0.25.1  # Audio manipulation
-aubio>=0.4.9  # Audio analysis
+# Mic / I/O (choose a single PyAudio; do NOT include 'portaudio' here)
+pyaudio>=0.2.14              # Has wheels for cp311 on Windows
+# pyaudio-fork                # REMOVE or keep only one to avoid conflicts
 
-# Perfect AI Transcription Engines
+# VAD (Windows note below)
+webrtcvad>=2.0.10
+
+# Optional / often tricky on Windows: comment out if it gives trouble
+aubio==0.4.9 ; platform_system != "Windows"
+
+# Transcription Engines
 faster-whisper>=0.10.0
 assemblyai>=0.17.0
-deepgram-sdk>=3.0.0
+deepgram-sdk>=3.0.0          # (remove duplicate at file end)
 openai>=1.0.0
+tiktoken>=0.5.0
 
-# AI and Machine Learning
-requests>=2.31.0
-torch>=2.0.0  # For advanced voice processing models
-torchaudio>=2.0.0  # Audio processing with PyTorch
-transformers>=4.30.0  # For voice activity detection models
+# AI and ML
+torch>=2.0.0
+torchaudio>=2.0.0
+transformers>=4.30.0
 
-# Perfect AI Analysis and Chat
-openai-whisper>=20231117  # Backup Whisper implementation
-tiktoken>=0.5.0  # Token counting for AI models
+# Performance / tooling
+numba>=0.59.0                # Supports Py3.11 + NumPy 1.26
+cython>=0.29.36
+psutil>=5.9.0
 
-# System Audio Capture (Windows/Linux/Mac)
-sounddevice>=0.4.6  # Cross-platform audio
-pyaudio-fork>=0.2.11  # Enhanced PyAudio
-portaudio>=19.6.0  # Audio I/O library
-
-# Advanced Audio Features
-resampy>=0.4.2  # Audio resampling
-soundfile>=0.12.1  # Audio file I/O
-audioread>=3.0.0  # Audio file reading
-ffmpeg-python>=0.2.0  # Audio format conversion
-
-# Performance Optimization
-numba>=0.57.0  # JIT compilation for audio processing
-cython>=0.29.0  # C extensions for speed
-psutil>=5.9.0  # System monitoring
-
-# Development and Testing
+# Dev / test
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 black>=23.0.0
 flake8>=6.0.0
-
-# Optional: GPU Acceleration (uncomment if you have CUDA)
-# torch-audio-cuda>=2.0.0
-# cupy>=12.0.0  # GPU-accelerated NumPy
-
-# Optional: Professional Audio Processing (uncomment for advanced features)
-# essentia>=2.1b6.dev1034  # Advanced audio analysis
-# madmom>=0.16.1  # Music and audio analysis
-# pyroomacoustics>=0.7.3  # Room acoustics simulation
-deepgram-sdk
