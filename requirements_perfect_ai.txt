@@ -1,0 +1,70 @@
+# Perfect AI Meeting Analyzer - Enhanced Requirements
+# Advanced voice processing and noise cancellation dependencies
+
+# Core Flask and SocketIO
+flask>=2.3.0
+flask-socketio>=5.3.0
+python-dotenv>=1.0.0
+
+# Audio Processing - Perfect AI Enhanced
+pyaudio>=0.2.11
+numpy>=1.19.0,<1.20.0  # Compatible with soundcard library
+soundcard>=0.4.2
+scipy>=1.9.0
+librosa>=0.10.0
+
+# Advanced Noise Reduction and Voice Processing
+noisereduce>=3.0.0
+webrtcvad>=2.0.10  # Voice Activity Detection
+spectral-subtraction>=1.0.0  # Advanced noise cancellation
+adaptive-filter>=0.2.0  # Adaptive filtering
+pydub>=0.25.1  # Audio manipulation
+aubio>=0.4.9  # Audio analysis
+
+# Perfect AI Transcription Engines
+faster-whisper>=0.10.0
+assemblyai>=0.17.0
+deepgram-sdk>=3.0.0
+openai>=1.0.0
+
+# AI and Machine Learning
+requests>=2.31.0
+torch>=2.0.0  # For advanced voice processing models
+torchaudio>=2.0.0  # Audio processing with PyTorch
+transformers>=4.30.0  # For voice activity detection models
+
+# Perfect AI Analysis and Chat
+openai-whisper>=20231117  # Backup Whisper implementation
+tiktoken>=0.5.0  # Token counting for AI models
+
+# System Audio Capture (Windows/Linux/Mac)
+sounddevice>=0.4.6  # Cross-platform audio
+pyaudio-fork>=0.2.11  # Enhanced PyAudio
+portaudio>=19.6.0  # Audio I/O library
+
+# Advanced Audio Features
+resampy>=0.4.2  # Audio resampling
+soundfile>=0.12.1  # Audio file I/O
+audioread>=3.0.0  # Audio file reading
+ffmpeg-python>=0.2.0  # Audio format conversion
+
+# Performance Optimization
+numba>=0.57.0  # JIT compilation for audio processing
+cython>=0.29.0  # C extensions for speed
+psutil>=5.9.0  # System monitoring
+
+# Development and Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+
+# Optional: GPU Acceleration (uncomment if you have CUDA)
+# torch-audio-cuda>=2.0.0
+# cupy>=12.0.0  # GPU-accelerated NumPy
+
+# Optional: Professional Audio Processing (uncomment for advanced features)
+# essentia>=2.1b6.dev1034  # Advanced audio analysis
+# madmom>=0.16.1  # Music and audio analysis
+# pyroomacoustics>=0.7.3  # Room acoustics simulation
+deepgram-sdk

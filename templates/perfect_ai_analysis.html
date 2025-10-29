@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 AI Analysis - Advanced Meeting Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --perfect-ai: #8B5CF6;
+            --perfect-ai-light: #EDE9FE;
+            --perfect-ai-dark: #7C3AED;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-perfect-ai: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-header {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            text-align: center;
+            padding: 2.5rem 2rem;
+            border-radius: 20px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin-top: 0.75rem;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            margin-top: 1.5rem;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+            font-size: 1.1rem;
+        }
+
+        .status-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            animation: perfectPulse 2s infinite;
+        }
+
+        @keyframes perfectPulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
+        }
+
+        .navigation-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--perfect-ai);
+            color: var(--perfect-ai);
+        }
+
+        .nav-link.current {
+            background: var(--perfect-ai-light);
+            border-color: var(--perfect-ai);
+            color: var(--perfect-ai-dark);
+        }
+
+        .analysis-container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .analysis-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .analysis-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 0;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-light);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .analysis-header {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .analysis-header h3 {
+            font-size: 1.3rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .analysis-content {
+            padding: 2rem;
+        }
+
+        .analysis-section {
+            margin-bottom: 2rem;
+        }
+
+        .analysis-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .key-points-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .key-point {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--perfect-ai-light);
+            border-radius: 12px;
+            border-left: 4px solid var(--perfect-ai);
+        }
+
+        .key-point-icon {
+            font-size: 1.2rem;
+            margin-top: 0.1rem;
+        }
+
+        .key-point-text {
+            flex: 1;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .issues-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .issue-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: #FEF2F2;
+            border-radius: 12px;
+            border-left: 4px solid var(--danger);
+        }
+
+        .issue-icon {
+            font-size: 1.2rem;
+            margin-top: 0.1rem;
+        }
+
+        .issue-text {
+            flex: 1;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .recommendations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: #F0FDF4;
+            border-radius: 12px;
+            border-left: 4px solid var(--success);
+        }
+
+        .recommendation-icon {
+            font-size: 1.2rem;
+            margin-top: 0.1rem;
+        }
+
+        .recommendation-text {
+            flex: 1;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .questions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .question-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: #FFF9E6;
+            border-radius: 12px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .question-icon {
+            font-size: 1.2rem;
+            margin-top: 0.1rem;
+        }
+
+        .question-text {
+            flex: 1;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .analysis-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .sidebar-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .sidebar-card h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .confidence-meter {
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .confidence-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: conic-gradient(var(--perfect-ai) 0deg, var(--perfect-ai) calc(var(--confidence, 85) * 3.6deg), var(--border-light) calc(var(--confidence, 85) * 3.6deg));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            position: relative;
+        }
+
+        .confidence-circle::before {
+            content: '';
+            width: 60px;
+            height: 60px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .confidence-value {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--perfect-ai);
+            position: relative;
+            z-index: 1;
+        }
+
+        .confidence-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .chat-container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 0;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: var(--gradient-accent);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 16px 16px 0 0;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .chat-message {
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+
+        .chat-message.user {
+            background: var(--perfect-ai-light);
+            color: var(--perfect-ai-dark);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-message.ai {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-input-container {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            resize: none;
+            height: 40px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--perfect-ai);
+        }
+
+        .chat-send-btn {
+            padding: 0.75rem 1rem;
+            background: var(--perfect-ai);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .chat-send-btn:hover {
+            background: var(--perfect-ai-dark);
+        }
+
+        .chat-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .analyzing-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            background: var(--perfect-ai-light);
+            border-radius: 16px;
+            margin: 2rem 0;
+            border: 2px solid var(--perfect-ai);
+        }
+
+        .analyzing-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--perfect-ai-light);
+            border-top: 3px solid var(--perfect-ai);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .export-controls {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .export-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        @media (max-width: 1024px) {
+            .analysis-container {
+                grid-template-columns: 1fr;
+            }
+
+            .analysis-sidebar {
+                order: -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .app-header {
+                padding: 2rem 1rem;
+            }
+
+            .app-header h1 {
+                font-size: 2rem;
+            }
+
+            .navigation-links {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .analysis-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .export-controls {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Perfect AI Header -->
+        <div class="app-header">
+            <h1>🤖 AI Analysis</h1>
+            <p class="subtitle">Intelligent meeting analysis with advanced AI insights and recommendations</p>
+            <div class="status-indicator" style="background-color: {{ status_color }}20; color: {{ status_color }};">
+                <div class="status-dot" style="background: {{ status_color }};"></div>
+                {{ status_text }}
+            </div>
+            {% if session_id %}
+            <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.9; font-weight: 500;">
+                Session ID: {{ session_id }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Navigation Links -->
+        <div class="navigation-links">
+            <a href="/" class="nav-link">
+                🎯 AI Configuration
+            </a>
+            <a href="/transcript" class="nav-link">
+                🎙️ Live Transcript
+            </a>
+            <a href="/analysis" class="nav-link current">
+                🤖 AI Analysis
+            </a>
+        </div>
+
+        <!-- Analyzing Indicator -->
+        {% if is_analyzing %}
+        <div class="analyzing-indicator">
+            <div class="analyzing-spinner"></div>
+            <div>
+                <strong> AI is analyzing your meeting...</strong><br>
+                <span style="font-size: 0.9rem; opacity: 0.8;">Generating insights and recommendations</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Analysis Container -->
+        <div class="analysis-container">
+            <!-- Main Analysis Area -->
+            <div class="analysis-main">
+                {% if analysis %}
+                <!-- Key Points -->
+                {% if analysis.key_points %}
+                <div class="analysis-card">
+                    <div class="analysis-header">
+                        <h3>🎯 Key Points</h3>
+                        <div class="export-controls">
+                            <button class="export-btn" onclick="exportSection('key_points')">📄 Export</button>
+                        </div>
+                    </div>
+                    <div class="analysis-content">
+                        <div class="key-points-list">
+                            {% for point in analysis.key_points %}
+                            <div class="key-point">
+                                <div class="key-point-icon">💡</div>
+                                <div class="key-point-text">{{ point }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Potential Issues -->
+                {% if analysis.potential_issues %}
+                <div class="analysis-card">
+                    <div class="analysis-header">
+                        <h3>⚠️ Potential Issues</h3>
+                        <div class="export-controls">
+                            <button class="export-btn" onclick="exportSection('issues')">📄 Export</button>
+                        </div>
+                    </div>
+                    <div class="analysis-content">
+                        <div class="issues-list">
+                            {% for issue in analysis.potential_issues %}
+                            <div class="issue-item">
+                                <div class="issue-icon">🚨</div>
+                                <div class="issue-text">{{ issue }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Recommendations -->
+                {% if analysis.recommendations %}
+                <div class="analysis-card">
+                    <div class="analysis-header">
+                        <h3>💡 Recommendations</h3>
+                        <div class="export-controls">
+                            <button class="export-btn" onclick="exportSection('recommendations')">📄 Export</button>
+                        </div>
+                    </div>
+                    <div class="analysis-content">
+                        <div class="recommendations-list">
+                            {% for recommendation in analysis.recommendations %}
+                            <div class="recommendation-item">
+                                <div class="recommendation-icon">✅</div>
+                                <div class="recommendation-text">{{ recommendation }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Clarifying Questions -->
+                {% if analysis.clarifying_questions %}
+                <div class="analysis-card">
+                    <div class="analysis-header">
+                        <h3>❓ Clarifying Questions</h3>
+                        <div class="export-controls">
+                            <button class="export-btn" onclick="exportSection('questions')">📄 Export</button>
+                        </div>
+                    </div>
+                    <div class="analysis-content">
+                        <div class="questions-list">
+                            {% for question in analysis.clarifying_questions %}
+                            <div class="question-item">
+                                <div class="question-icon">❓</div>
+                                <div class="question-text">{{ question }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <!-- Empty State -->
+                <div class="analysis-card">
+                    <div class="analysis-content">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🤖</div>
+                            <h3> AI Analysis Ready</h3>
+                            <p>Start recording to generate intelligent meeting analysis.<br>
+                                AI will provide key points, identify issues, suggest recommendations, and ask clarifying
+                                questions.</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Sidebar -->
+            <div class="analysis-sidebar">
+                <!-- Analysis Confidence -->
+                <div class="sidebar-card">
+                    <h4>🎯 Analysis Confidence</h4>
+                    <div class="confidence-meter">
+                        <div class="confidence-circle" style="--confidence: {{ analysis_confidence or 85 }}">
+                            <div class="confidence-value">{{ analysis_confidence or 85 }}%</div>
+                        </div>
+                        <div class="confidence-label"> AI Confidence</div>
+                    </div>
+                </div>
+
+                <!-- Perfect AI Chat -->
+                <div class="chat-container">
+                    <div class="chat-header">
+                        💬 AI Chat
+                    </div>
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="chat-message ai">
+                            👋 Hi! I'm your AI assistant. Ask me anything about your meeting analysis, key points, or
+                            recommendations!
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <textarea class="chat-input" id="chat-input" placeholder="Ask  AI about your meeting..."
+                            rows="1"></textarea>
+                        <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+                    </div>
+                </div>
+
+                <!-- Session Statistics -->
+                <div class="sidebar-card">
+                    <h4>📊 Session Stats</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
+                        <div
+                            style="text-align: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-weight: 700; color: var(--perfect-ai); font-size: 1.2rem;">{{ word_count }}
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.8rem;">Words</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-weight: 700; color: var(--perfect-ai); font-size: 1.2rem;">{{ '%02d:%02d' |
+                                format(duration // 60, duration % 60) }}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.8rem;">Duration</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-weight: 700; color: var(--perfect-ai); font-size: 1.2rem;">{{ insights }}
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.8rem;">Insights</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="font-weight: 700; color: var(--perfect-ai); font-size: 1.2rem;">{{
+                                segments_count }}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.8rem;">Segments</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Options -->
+                <div class="sidebar-card">
+                    <h4>📤 Export Analysis</h4>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button onclick="exportFullAnalysis()"
+                            style="padding: 0.75rem; background: var(--perfect-ai); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            📄 Export Full Analysis
+                        </button>
+                        <button onclick="exportSummary()"
+                            style="padding: 0.75rem; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            📋 Export Summary
+                        </button>
+                        <button onclick="exportTranscript()"
+                            style="padding: 0.75rem; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            🎙️ Export Transcript
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Perfect AI JavaScript -->
+    <script>
+        // Perfect AI Global state
+        let isRecording = {{ 'true' if is_recording else 'false' }};
+        let isAnalyzing = {{ 'true' if is_analyzing else 'false' }};
+        let currentAnalysis = {{ analysis | tojson if analysis else 'null' }};
+        let socket;
+        let chatHistory = [];
+
+        // Initialize Perfect AI SocketIO connection
+        function initializePerfectAISocket() {
+            socket = io({
+                transports: ['polling', 'websocket'],  // Try polling first for stability
+                upgrade: true,
+                rememberUpgrade: false,  // Don't remember upgrades
+                timeout: 10000,  // Shorter timeout
+                forceNew: false,  // Don't force new connection
+                reconnection: true,
+                reconnectionDelay: 2000,  // Wait 2 seconds before reconnecting
+                reconnectionAttempts: 10,
+                maxReconnectionAttempts: 20,
+                autoConnect: true
+            });
+
+            socket.on('connect', function () {
+                console.log('🎯 Perfect AI analysis connected');
+                socket.emit('request_perfect_status');
+            });
+
+            socket.on('disconnect', function (reason) {
+                console.log('🎯 Perfect AI analysis disconnected:', reason);
+                if (reason === 'io server disconnect') {
+                    socket.connect();
+                }
+            });
+
+            socket.on('connect_error', function (error) {
+                console.error('🎯 Perfect AI analysis connection error:', error);
+            });
+
+            socket.on('reconnect', function (attemptNumber) {
+                console.log('🎯 Perfect AI analysis reconnected after', attemptNumber, 'attempts');
+                socket.emit('request_perfect_status');
+            });
+
+            socket.on('perfect_analysis_update', function (data) {
+                console.log('🎯 Perfect AI analysis update:', data);
+                updateAnalysisDisplay(data.analysis);
+                updateConfidence(data.perfect_ai_confidence || 85);
+            });
+
+            socket.on('perfect_final_analysis_complete', function (data) {
+                console.log('🎯 Perfect AI final analysis complete');
+                updateAnalysisDisplay(data.analysis);
+                updateConfidence(data.perfect_ai_quality_score || 95);
+                hideAnalyzingIndicator();
+            });
+
+            socket.on('perfect_status_update', function (data) {
+                console.log('🎯  AI status update:', data);
+                isRecording = data.is_recording;
+                isAnalyzing = data.is_analyzing;
+
+                if (data.current_analysis) {
+                    updateAnalysisDisplay(data.current_analysis);
+                }
+            });
+
+            socket.on('perfect_proactive_question', function (data) {
+                console.log('🎯 Perfect AI proactive question received');
+                addProactiveQuestionToChat(data);
+            });
+        }
+
+        function updateAnalysisDisplay(analysis) {
+            if (!analysis) return;
+
+            currentAnalysis = analysis;
+            console.log('Analysis updated:', analysis);
+
+            // Update the main analysis area dynamically
+            const analysisMain = document.querySelector('.analysis-main');
+            if (!analysisMain) return;
+
+            // Clear existing content
+            analysisMain.innerHTML = '';
+
+            // Add Key Points
+            if (analysis.key_points && analysis.key_points.length > 0) {
+                const keyPointsCard = createAnalysisCard('🎯 Key Points', analysis.key_points, 'key-point', '💡', 'key_points');
+                analysisMain.appendChild(keyPointsCard);
+            }
+
+            // Add Potential Issues
+            if (analysis.potential_issues && analysis.potential_issues.length > 0) {
+                const issuesCard = createAnalysisCard('⚠️ Potential Issues', analysis.potential_issues, 'issue-item', '🚨', 'issues', '#FEF2F2', '#DC2626');
+                analysisMain.appendChild(issuesCard);
+            }
+
+            // Add Recommendations
+            if (analysis.recommendations && analysis.recommendations.length > 0) {
+                const recommendationsCard = createAnalysisCard('💡 Recommendations', analysis.recommendations, 'recommendation-item', '✅', 'recommendations', '#F0FDF4', '#10B981');
+                analysisMain.appendChild(recommendationsCard);
+            }
+
+            // Add Clarifying Questions
+            if (analysis.clarifying_questions && analysis.clarifying_questions.length > 0) {
+                const questionsCard = createAnalysisCard('❓ Clarifying Questions', analysis.clarifying_questions, 'question-item', '❓', 'questions', '#FFF9E6', '#F59E0B');
+                analysisMain.appendChild(questionsCard);
+            }
+
+            // If no analysis content, show empty state
+            if (!analysis.key_points && !analysis.potential_issues && !analysis.recommendations && !analysis.clarifying_questions) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'analysis-card';
+                emptyState.innerHTML = `
+                    <div class="analysis-content">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🤖</div>
+                            <h3>AI Analysis Ready</h3>
+                            <p>Start recording to generate intelligent meeting analysis.<br>
+                            AI will provide key points, identify issues, suggest recommendations, and ask clarifying questions.</p>
+                        </div>
+                    </div>
+                `;
+                analysisMain.appendChild(emptyState);
+            }
+        }
+
+        function createAnalysisCard(title, items, itemClass, icon, exportType, bgColor = 'var(--perfect-ai-light)', borderColor = 'var(--perfect-ai)') {
+            const card = document.createElement('div');
+            card.className = 'analysis-card';
+
+            const itemsHtml = items.map(item => `
+                <div class="${itemClass}" style="background: ${bgColor}; border-left: 4px solid ${borderColor};">
+                    <div class="${itemClass.replace('-item', '-icon')}">${icon}</div>
+                    <div class="${itemClass.replace('-item', '-text')}">${item}</div>
+                </div>
+            `).join('');
+
+            card.innerHTML = `
+                <div class="analysis-header">
+                    <h3>${title}</h3>
+                    <div class="export-controls">
+                        <button class="export-btn" onclick="exportSection('${exportType}')">📄 Export</button>
+                    </div>
+                </div>
+                <div class="analysis-content">
+                    <div class="${itemClass.replace('-item', 's-list')}">
+                        ${itemsHtml}
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function updateConfidence(confidence) {
+            const confidenceCircle = document.querySelector('.confidence-circle');
+            const confidenceValue = document.querySelector('.confidence-value');
+
+            if (confidenceCircle) {
+                confidenceCircle.style.setProperty('--confidence', confidence);
+            }
+
+            if (confidenceValue) {
+                confidenceValue.textContent = confidence + '%';
+            }
+        }
+
+        function hideAnalyzingIndicator() {
+            const indicator = document.querySelector('.analyzing-indicator');
+            if (indicator) {
+                indicator.style.display = 'none';
+            }
+        }
+
+        function addProactiveQuestionToChat(data) {
+            const chatMessages = document.getElementById('chat-messages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message ai';
+            messageDiv.innerHTML = `
+                <strong>🎯 Proactive Question:</strong><br>
+                ${data.question}
+                <div style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.5rem;">
+                    Based on ${data.analysis_context.word_count} words analyzed
+                </div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('chat-send-btn');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Add user message to chat
+            addChatMessage(message, 'user');
+
+            // Clear input and disable button
+            input.value = '';
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addChatMessage(result.response, 'ai');
+                } else {
+                    addChatMessage('Sorry, I encountered an error. Please try again.', 'ai');
+                }
+
+            } catch (error) {
+                console.error('Chat error:', error);
+                addChatMessage('Sorry, I encountered an error. Please try again.', 'ai');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send';
+                input.focus();
+            }
+        }
+
+        function addChatMessage(message, sender) {
+            const chatMessages = document.getElementById('chat-messages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}`;
+            messageDiv.textContent = message;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Store in history
+            chatHistory.push({ message, sender, timestamp: new Date() });
+        }
+
+        function exportSection(sectionType) {
+            if (!currentAnalysis) {
+                alert('No analysis data to export');
+                return;
+            }
+
+            let data = {};
+            let filename = '';
+
+            switch (sectionType) {
+                case 'key_points':
+                    data = { key_points: currentAnalysis.key_points || [] };
+                    filename = 'perfect_ai_key_points';
+                    break;
+                case 'issues':
+                    data = { potential_issues: currentAnalysis.potential_issues || [] };
+                    filename = 'perfect_ai_issues';
+                    break;
+                case 'recommendations':
+                    data = { recommendations: currentAnalysis.recommendations || [] };
+                    filename = 'perfect_ai_recommendations';
+                    break;
+                case 'questions':
+                    data = { clarifying_questions: currentAnalysis.clarifying_questions || [] };
+                    filename = 'perfect_ai_questions';
+                    break;
+            }
+
+            downloadJSON(data, filename);
+        }
+
+        function exportFullAnalysis() {
+            if (!currentAnalysis) {
+                alert('No analysis data to export');
+                return;
+            }
+
+            const exportData = {
+                session_id: '{{ session_id }}',
+                timestamp: new Date().toISOString(),
+                perfect_ai_version: '1.0',
+                analysis: currentAnalysis,
+                chat_history: chatHistory,
+                confidence: document.querySelector('.confidence-value')?.textContent || '85%'
+            };
+
+            downloadJSON(exportData, 'perfect_ai_full_analysis');
+        }
+
+        function exportSummary() {
+            window.location.href = '/export/summary';
+        }
+
+        function exportTranscript() {
+            window.location.href = '/api/transcript';
+        }
+
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filename}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            initializePerfectAISocket();
+
+            // Chat input handling
+            const chatInput = document.getElementById('chat-input');
+            chatInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                }
+            });
+
+            // Auto-resize chat input
+            chatInput.addEventListener('input', function () {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+        });
+    </script>
+</body>
+
+</html>

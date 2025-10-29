@@ -11,3 +11,4 @@ noisereduce
 librosa
 assemblyai
 openai
+deepgram-sdk

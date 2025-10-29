@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 AI Configuration - Advanced Meeting Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --perfect-ai: #8B5CF6;
+            --perfect-ai-light: #EDE9FE;
+            --perfect-ai-dark: #7C3AED;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-perfect-ai: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-header {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            text-align: center;
+            padding: 2.5rem 2rem;
+            border-radius: 20px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin-top: 0.75rem;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            margin-top: 1.5rem;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+            font-size: 1.1rem;
+        }
+
+        .status-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            animation: perfectPulse 2s infinite;
+        }
+
+        @keyframes perfectPulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(1.2);
+            }
+        }
+
+        .perfect-ai-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-top: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .control-section {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-light);
+            position: relative;
+        }
+
+        .control-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-perfect-ai);
+            border-radius: 20px 20px 0 0;
+        }
+
+        .control-section h3 {
+            color: var(--text-primary);
+            font-size: 1.3rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .perfect-ai-section {
+            background: var(--perfect-ai-light);
+            border: 2px solid var(--perfect-ai);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .perfect-ai-section h4 {
+            color: var(--perfect-ai-dark);
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mode-selection {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .mode-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .mode-option {
+            position: relative;
+        }
+
+        .mode-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .mode-option label {
+            display: block;
+            padding: 1rem 1.25rem;
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .mode-option input[type="radio"]:checked+label {
+            border-color: var(--perfect-ai);
+            background: var(--perfect-ai-light);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .mode-option label:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .mode-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .mode-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .perfect-ai-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .perfect-ai-control {
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .perfect-ai-control h5 {
+            color: var(--perfect-ai-dark);
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .slider-container {
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--perfect-ai);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--perfect-ai);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .audio-source-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .button-grid {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .control-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .control-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .control-button:hover::before {
+            left: 100%;
+        }
+
+        .btn-start {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-stop {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-analyze {
+            background: var(--gradient-accent);
+            color: white;
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #6B7280, #4B5563);
+            color: white;
+            box-shadow: 0 8px 25px rgba(107, 114, 128, 0.3);
+        }
+
+        .control-button:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-button:active:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .control-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .navigation-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--perfect-ai);
+            color: var(--perfect-ai);
+        }
+
+        .nav-link.current {
+            background: var(--perfect-ai-light);
+            border-color: var(--perfect-ai);
+            color: var(--perfect-ai-dark);
+        }
+
+        .session-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 2rem;
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-perfect-ai);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin-bottom: 0.5rem;
+            background: var(--gradient-perfect-ai);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .perfect-ai-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-item {
+            text-align: center;
+            padding: 1rem;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--perfect-ai);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .message {
+            padding: 1.25rem;
+            border-radius: 16px;
+            margin: 1rem 0;
+            font-weight: 500;
+            border-left: 4px solid;
+        }
+
+        .message.success {
+            background: #D1FAE5;
+            color: #065F46;
+            border-left-color: var(--success);
+        }
+
+        .message.error {
+            background: #FEE2E2;
+            color: #991B1B;
+            border-left-color: var(--danger);
+        }
+
+        .message.info {
+            background: var(--perfect-ai-light);
+            color: var(--perfect-ai-dark);
+            border-left-color: var(--perfect-ai);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .app-header {
+                padding: 2rem 1rem;
+            }
+
+            .app-header h1 {
+                font-size: 2rem;
+            }
+
+            .button-grid {
+                flex-direction: column;
+            }
+
+            .mode-options {
+                grid-template-columns: 1fr;
+            }
+
+            .audio-source-options {
+                grid-template-columns: 1fr;
+            }
+
+            .perfect-ai-options {
+                grid-template-columns: 1fr;
+            }
+
+            .navigation-links {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+
+        /* Fix selection and focus styles */
+        ::selection {
+            background: var(--perfect-ai-light);
+            color: var(--perfect-ai-dark);
+        }
+
+        ::-moz-selection {
+            background: var(--perfect-ai-light);
+            color: var(--perfect-ai-dark);
+        }
+
+        input:focus, textarea:focus, button:focus {
+            outline: 2px solid var(--perfect-ai);
+            outline-offset: 2px;
+            background: var(--bg) !important;
+        }
+
+        input[type="text"]:focus, input[type="number"]:focus {
+            background: var(--bg) !important;
+            border-color: var(--perfect-ai) !important;
+        }
+
+        .preset-btn:focus, .preset-btn:active {
+            background: var(--perfect-ai-light) !important;
+            border-color: var(--perfect-ai) !important;
+            color: var(--perfect-ai-dark) !important;
+        }
+
+        .control-button:focus, .control-button:active {
+            background: var(--perfect-ai) !important;
+            color: white !important;
+        }
+
+        /* Fix radio button labels */
+        .mode-option label:focus, .mode-option label:active {
+            background: var(--perfect-ai-light) !important;
+            border-color: var(--perfect-ai) !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Perfect AI Header -->
+        <div class="app-header">
+            <h1>🎯 AI Meeting Analyzer</h1>
+            <p class="subtitle">Simple and reliable voice recording</p>
+            <div class="perfect-ai-badge">
+                <span>🚀</span>
+                <span> AI v1.0 - Maximum Voice Isolation</span>
+            </div>
+            <div class="status-indicator" style="background-color: {{ status_color }}20; color: {{ status_color }};">
+                <div class="status-dot" style="background: {{ status_color }};"></div>
+                {{ status_text }}
+            </div>
+            {% if session_id %}
+            <div style="margin-top: 1rem; font-size: 1rem; opacity: 0.9; font-weight: 500;">
+                Session ID: {{ session_id }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Navigation Links -->
+        <div class="navigation-links">
+            <a href="/" class="nav-link current">
+                🎯 AI Configuration
+            </a>
+            <a href="/transcript" class="nav-link">
+                🎙️ Live Transcript
+            </a>
+            <a href="/analysis" class="nav-link">
+                🤖 AI Analysis
+            </a>
+        </div>
+
+        <!--  AI Configuration (Only show when not recording) -->
+        {% if not is_recording %}
+
+
+        <!-- Analysis Mode Configuration -->
+        <div class="control-section">
+            <h3>⚙️ Analysis Configuration</h3>
+            <div class="mode-selection">
+                <h4>📊 Select Analysis Mode</h4>
+                <div class="mode-options">
+                    <div class="mode-option">
+                        <input type="radio" id="mode-automatic" name="analysis-mode" value="automatic" checked>
+                        <label for="mode-automatic">
+                            <div class="mode-title">🤖 Automatic Mode</div>
+                            <div class="mode-description"> AI auto-generates analysis after specified word count with
+                                real-time insights</div>
+                        </label>
+                    </div>
+                    <div class="mode-option">
+                        <input type="radio" id="mode-manual" name="analysis-mode" value="manual">
+                        <label for="mode-manual">
+                            <div class="mode-title">👆 Manual Mode</div>
+                            <div class="mode-description">On-demand AI analysis with "Analyze Now" button</div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Word Count Configuration -->
+                <div class="word-count-config active" id="word-count-config"
+                    style="background: #FFF9E6; border: 2px solid var(--accent); border-radius: 12px; padding: 1.5rem; display: block;">
+                    <h5 style="color: var(--accent); margin-bottom: 1rem;">📝 Word Count Threshold for AI Analysis</h5>
+                    <div
+                        style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
+                        <button class="preset-btn active" data-words="200"
+                            style="padding: 0.75rem; border: 2px solid var(--border); background: white; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: 600; font-size: 0.85rem;">200
+                            words<br><small>Very Frequent</small></button>
+                        <button class="preset-btn" data-words="300"
+                            style="padding: 0.75rem; border: 2px solid var(--border); background: white; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: 600; font-size: 0.85rem;">300
+                            words<br><small>Frequent</small></button>
+                        <button class="preset-btn" data-words="500"
+                            style="padding: 0.75rem; border: 2px solid var(--border); background: white; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: 600; font-size: 0.85rem;">500
+                            words<br><small>Moderate</small></button>
+                        <button class="preset-btn" data-words="1000"
+                            style="padding: 0.75rem; border: 2px solid var(--border); background: white; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: 600; font-size: 0.85rem;">1000
+                            words<br><small>Sparse</small></button>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem;">
+                        <label style="font-weight: 600; color: var(--text-primary);">Or Custom:</label>
+                        <input type="number" id="custom-words" min="50" max="5000" step="50"
+                            placeholder="Enter word count"
+                            style="flex: 1; padding: 0.75rem; border: 2px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.9rem;">
+                        <button onclick="setCustomWords()"
+                            style="padding: 0.75rem 1rem; border: 2px solid var(--accent); background: var(--accent); color: white; border-radius: 8px; cursor: pointer; font-weight: 600;">Apply</button>
+                    </div>
+                    <div id="selected-threshold"
+                        style="margin-top: 1.5rem; padding: 1.25rem; background: white; border-radius: 12px; text-align: center; font-weight: 700; color: var(--accent); border: 2px solid var(--accent);">
+                        ✅ AI analysis will trigger every <span id="threshold-value">200</span> words
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio Source Selection -->
+            <div class="mode-selection">
+                <h4>🎤 Select Audio Source for AI Processing</h4>
+                <div class="audio-source-options">
+                    <div class="mode-option">
+                        <input type="radio" id="audio-mic" name="audio-source" value="mic" checked>
+                        <label for="audio-mic">
+                            <div class="mode-title">🎤 Microphone Only</div>
+                            <div class="mode-description"> AI captures and isolates your voice with maximum noise
+                                cancellation</div>
+                        </label>
+                    </div>
+                    <div class="mode-option">
+                        <input type="radio" id="audio-system" name="audio-source" value="system">
+                        <label for="audio-system">
+                            <div class="mode-title">🔊 System Audio Only</div>
+                            <div class="mode-description"> AI captures meeting audio (Zoom/Teams/Meet) with voice
+                                isolation</div>
+                        </label>
+                    </div>
+                    <div class="mode-option">
+                        <input type="radio" id="audio-both" name="audio-source" value="both">
+                        <label for="audio-both">
+                            <div class="mode-title">🎧 Both Sources</div>
+                            <div class="mode-description"> AI captures mic + system audio with echo cancellation and
+                                separation</div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transcription Engine Selection -->
+            <div class="mode-selection">
+                <h4>🤖 Select Transcription Engine</h4>
+                <div class="audio-source-options" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="mode-option">
+                        <input type="radio" id="engine-whisper" name="transcription-engine" value="faster_whisper"
+                            checked>
+                        <label for="engine-whisper">
+                            <div class="mode-title">⚡ Perfect AI Whisper</div>
+                            <div class="mode-description">Local processing with Perfect AI optimization, maximum
+                                privacy, real-time performance</div>
+                        </label>
+                    </div>
+                    <div class="mode-option">
+                        <input type="radio" id="engine-assemblyai" name="transcription-engine" value="assemblyai">
+                        <label for="engine-assemblyai">
+                            <div class="mode-title">🌐 AssemblyAI Enhanced</div>
+                            <div class="mode-description">Cloud-based with Perfect AI preprocessing, highest accuracy,
+                                advanced features</div>
+                        </label>
+                    </div>
+                    <div class="mode-option">
+                        <input type="radio" id="engine-deepgram" name="transcription-engine" value="deepgram">
+                        <label for="engine-deepgram">
+                            <div class="mode-title">🚀 Deepgram Nova-2</div>
+                            <div class="mode-description">Latest AI model with Perfect AI integration, ultra-fast,
+                                highest accuracy</div>
+                        </label>
+                    </div>
+                </div>
+                <div
+                    style="margin-top: 1.5rem; padding: 1.5rem; background: var(--perfect-ai-light); border-radius: 12px; font-size: 0.9rem; color: #666; border: 1px solid var(--perfect-ai);">
+                    <strong>Perfect AI Whisper:</strong> Runs locally with Perfect AI voice processing, completely
+                    private, optimized for real-time use.<br>
+                    <strong>AssemblyAI Enhanced:</strong> Cloud service with Perfect AI preprocessing for superior
+                    accuracy and advanced features.<br>
+                    <strong>Deepgram Nova-2:</strong> Latest AI model with Perfect AI integration, ultra-fast
+                    processing, highest accuracy available.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Perfect AI Recording Controls -->
+        <div class="control-section">
+            <h3>🎯 AI Recording Controls</h3>
+            <div class="button-grid">
+                <button class="control-button btn-start" onclick="startPerfectAIRecording()" {% if is_recording
+                    %}disabled{% endif %}>
+                    🎯 Start AI Recording
+                </button>
+                <button id="stop-btn" class="control-button btn-stop" onclick="stopPerfectAIRecording()" {% if not
+                    is_recording %}disabled{% endif %}>
+                    ⏸️ Stop Recording
+                </button>
+                {% if is_recording %}
+                <button class="control-button btn-analyze" onclick="triggerPerfectAIAnalysis()" id="analyze-btn" {% if
+                    is_analyzing %}disabled{% endif %}>
+                    {% if is_analyzing %}
+                    🧠 AI Analyzing...
+                    {% else %}
+                    🎯 Analyze Now
+                    {% endif %}
+                </button>
+                {% endif %}
+                <button class="control-button btn-clear" onclick="clearPerfectAIData()" {% if is_recording %}disabled{%
+                    endif %}>
+                    🗑️ Clear All Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Perfect AI Session Statistics -->
+        <div class="session-stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_sessions }}</div>
+                <div class="stat-label"> AI Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_meetings_analyzed }}</div>
+                <div class="stat-label">Meetings Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ word_count }}</div>
+                <div class="stat-label">Words Captured</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ '%02d:%02d' | format(duration // 60, duration % 60) }}</div>
+                <div class="stat-label">Duration</div>
+            </div>
+        </div>
+
+        <!-- Perfect AI Metrics -->
+        {% if is_recording %}
+        <div class="control-section">
+            <h3>🎯 AI Real-time Metrics</h3>
+            <div class="perfect-ai-metrics">
+                <div class="metric-item">
+                    <div class="metric-value" id="audio-quality">{{ audio_quality or 95 }}%</div>
+                    <div class="metric-label">Audio Quality</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="voice-isolation">{{ voice_isolation_score or 92 }}%</div>
+                    <div class="metric-label">Voice Isolation</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="noise-reduction">{{ noise_reduction_db or 18 }}dB</div>
+                    <div class="metric-label">Noise Reduction</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="processing-speed">1.2ms</div>
+                    <div class="metric-label">Processing Speed</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Saved Recordings Management -->
+        <div class="control-section">
+            <h3>📁 Saved Recordings</h3>
+            <div class="recordings-container">
+                <div class="recordings-header">
+                    <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                        All recording sessions are automatically saved as WAV files. You can download or delete them here.
+                    </p>
+                    <button class="control-button" onclick="refreshRecordings()" style="margin-bottom: 1rem;">
+                        🔄 Refresh List
+                    </button>
+                </div>
+                <div id="recordingsList" class="recordings-list">
+                    <div class="loading-recordings">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            📂 Loading recordings...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+
+        <!-- Perfect AI Recording Status -->
+        {% if is_recording %}
+        <div
+            style="background: var(--gradient-perfect-ai); color: white; text-align: center; padding: 2rem; border-radius: 25px; font-weight: 700; font-size: 1.5rem; animation: perfectRecordingPulse 2s infinite; box-shadow: 0 12px 35px rgba(139, 92, 246, 0.5); margin: 2rem 0; position: relative; overflow: hidden;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem;">
+                <!-- Sound Wave Animation -->
+                <div class="sound-wave-container">
+                    <div class="sound-wave-bar" style="animation-delay: 0s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.1s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.2s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.3s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.4s;"></div>
+                </div>
+                <span>🎯 PERFECT AI LIVE RECORDING - {{ '%02d:%02d' | format(duration // 60, duration % 60) }}</span>
+                <!-- Sound Wave Animation -->
+                <div class="sound-wave-container">
+                    <div class="sound-wave-bar" style="animation-delay: 0.2s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.3s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.4s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.5s;"></div>
+                    <div class="sound-wave-bar" style="animation-delay: 0.6s;"></div>
+                </div>
+            </div>
+            <div style="font-size: 1rem; margin-top: 0.75rem; opacity: 0.9;">
+                🎤 Recording in progress - Simple and reliable
+            </div>
+        </div>
+        <style>
+            @keyframes perfectRecordingPulse {
+
+                0%,
+                100% {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+
+                50% {
+                    opacity: 0.95;
+                    transform: scale(1.02);
+                }
+            }
+
+            .sound-wave-container {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                height: 30px;
+            }
+
+            .sound-wave-bar {
+                width: 4px;
+                background: #fff;
+                border-radius: 2px;
+                animation: soundWave 0.8s ease-in-out infinite alternate;
+            }
+
+            @keyframes soundWave {
+                0% {
+                    height: 8px;
+                    opacity: 0.7;
+                }
+
+                100% {
+                    height: 30px;
+                    opacity: 1;
+                }
+            }
+
+            .audio-level-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .audio-level-bar {
+                width: 200px;
+                height: 8px;
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+                overflow: hidden;
+                position: relative;
+            }
+
+            .audio-level-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #10B981 0%, #F59E0B 70%, #DC2626 100%);
+                border-radius: 4px;
+                width: 0%;
+                transition: width 0.1s ease;
+                animation: audioLevelPulse 0.5s ease-in-out infinite alternate;
+            }
+
+            @keyframes audioLevelPulse {
+                0% {
+                    box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+                }
+
+                100% {
+                    box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+                }
+            }
+
+            /* Responsive sound waves */
+            @media (max-width: 768px) {
+                .sound-wave-container {
+                    gap: 2px;
+                    height: 20px;
+                }
+
+                .sound-wave-bar {
+                    width: 3px;
+                }
+
+                @keyframes soundWave {
+                    0% {
+                        height: 6px;
+                        opacity: 0.7;
+                    }
+
+                    100% {
+                        height: 20px;
+                        opacity: 1;
+                    }
+                }
+
+                .audio-level-bar {
+                    width: 150px;
+                    height: 6px;
+                }
+            }
+
+            /* Recordings Management Styles */
+            .recordings-container {
+                background: var(--bg-secondary);
+                border-radius: 12px;
+                padding: 1.5rem;
+            }
+
+            .recordings-list {
+                max-height: 400px;
+                overflow-y: auto;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: white;
+            }
+
+            .recording-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 1rem;
+                border-bottom: 1px solid var(--border-light);
+                transition: background-color 0.2s;
+            }
+
+            .recording-item:hover {
+                background: var(--bg-tertiary);
+            }
+
+            .recording-item:last-child {
+                border-bottom: none;
+            }
+
+            .recording-info {
+                flex: 1;
+            }
+
+            .recording-name {
+                font-weight: 600;
+                color: var(--text-primary);
+                margin-bottom: 0.25rem;
+            }
+
+            .recording-details {
+                font-size: 0.85rem;
+                color: var(--text-secondary);
+            }
+
+            .recording-actions {
+                display: flex;
+                gap: 0.5rem;
+            }
+
+            .recording-btn {
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                font-weight: 600;
+                transition: all 0.2s;
+            }
+
+            .recording-btn.download {
+                background: var(--success);
+                color: white;
+            }
+
+            .recording-btn.download:hover {
+                background: #059669;
+            }
+
+            .recording-btn.delete {
+                background: var(--danger);
+                color: white;
+            }
+
+            .recording-btn.delete:hover {
+                background: #B91C1C;
+            }
+
+            .no-recordings {
+                text-align: center;
+                padding: 3rem 1rem;
+                color: var(--text-secondary);
+            }
+        </style>
+        {% endif %}
+    </div>
+
+    <!-- Perfect AI JavaScript -->
+    <script>
+        // Perfect AI Global state
+        let isRecording = {{ 'true' if is_recording else 'false' }};
+        let isAnalyzing = {{ 'true' if is_analyzing else 'false' }};
+        let selectedWordsThreshold = 200;
+        let selectedMode = 'automatic';
+        let selectedAudioSource = 'mic';
+        let selectedTranscriptionEngine = 'faster_whisper';
+        let voiceIsolationLevel = 'maximum';
+        let noiseCancellationStrength = 'aggressive';
+        let voiceActivitySensitivity = 0.7;
+        let socket;
+
+        // Initialize Perfect AI SocketIO connection
+        function initializePerfectAISocket() {
+            socket = io({
+                transports: ['polling', 'websocket'],  // Try polling first for stability
+                upgrade: true,
+                rememberUpgrade: false,  // Don't remember upgrades
+                timeout: 10000,  // Shorter timeout
+                forceNew: false,  // Don't force new connection
+                reconnection: true,
+                reconnectionDelay: 2000,  // Wait 2 seconds before reconnecting
+                reconnectionAttempts: 10,
+                maxReconnectionAttempts: 20,
+                autoConnect: true
+            });
+
+            socket.on('connect', function () {
+                console.log('🎯 Perfect AI connected to server');
+                socket.emit('request_perfect_status');
+            });
+
+            socket.on('disconnect', function (reason) {
+                console.log('🎯 Perfect AI disconnected:', reason);
+                if (reason === 'io server disconnect') {
+                    socket.connect();
+                }
+            });
+
+            socket.on('connect_error', function (error) {
+                console.error('🎯 Perfect AI connection error:', error);
+            });
+
+            socket.on('reconnect', function (attemptNumber) {
+                console.log('🎯 Perfect AI reconnected after', attemptNumber, 'attempts');
+                socket.emit('request_perfect_status');
+            });
+
+            // Add heartbeat to keep connection alive
+            setInterval(function () {
+                if (socket && socket.connected) {
+                    socket.emit('heartbeat');
+                }
+            }, 30000);  // Send heartbeat every 30 seconds
+
+            socket.on('perfect_status_update', function (data) {
+                console.log('🎯 Perfect AI status update:', data);
+                isRecording = data.is_recording;
+                isAnalyzing = data.is_analyzing;
+                updatePerfectAIRecordingStatus();
+            });
+
+            socket.on('perfect_transcript_update', function (data) {
+                console.log('🎯 Perfect AI transcript:', data.new_text);
+                updatePerfectAIMetrics(data);
+            });
+
+            socket.on('perfect_analysis_update', function (data) {
+                console.log('🎯 Perfect AI analysis update');
+                showMessage('Perfect AI analysis updated! Check the AI Analysis page.', 'success');
+            });
+
+            socket.on('perfect_recording_stopped', function (data) {
+                console.log('🎯 Perfect AI recording stopped');
+                isRecording = false;
+                updatePerfectAIRecordingStatus();
+            });
+
+            socket.on('perfect_final_analysis_complete', function (data) {
+                console.log('🎯 Perfect AI final analysis complete');
+                showMessage('Perfect AI final analysis complete! Session ended.', 'success');
+                
+                // Check if we should refresh transcript page
+                if (data.refresh_transcript_page) {
+                    showMessage('📄 Transcript page will be refreshed with final analysis!', 'info');
+                }
+            });
+
+            socket.on('perfect_proactive_question', function (data) {
+                console.log('🎯 Perfect AI proactive question:', data.question);
+                showPerfectAIProactiveQuestion(data);
+            });
+        }
+
+        function updatePerfectAIRecordingStatus() {
+            const startBtn = document.querySelector('.btn-start');
+            const stopBtn = document.getElementById('stop-btn');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const clearBtn = document.querySelector('.btn-clear');
+
+            if (startBtn) startBtn.disabled = isRecording;
+            if (stopBtn) stopBtn.disabled = !isRecording;
+            if (clearBtn) clearBtn.disabled = isRecording;
+
+            if (analyzeBtn) {
+                if (isAnalyzing) {
+                    analyzeBtn.innerHTML = '🧠 Perfect AI Analyzing...';
+                    analyzeBtn.disabled = true;
+                } else {
+                    analyzeBtn.innerHTML = '🎯 Analyze Now';
+                    analyzeBtn.disabled = !isRecording;
+                }
+            }
+
+            // Simple recording status update - no visualization needed
+        }
+
+        function updatePerfectAIMetrics(data) {
+            // Update real-time Perfect AI metrics
+            const audioQuality = document.getElementById('audio-quality');
+            const voiceIsolation = document.getElementById('voice-isolation');
+            const noiseReduction = document.getElementById('noise-reduction');
+
+            if (audioQuality) audioQuality.textContent = data.perfect_ai_quality + '%';
+            if (voiceIsolation) voiceIsolation.textContent = data.voice_isolation_score + '%';
+            if (noiseReduction) noiseReduction.textContent = data.noise_reduction_db + 'dB';
+        }
+
+        // Simple recording status - no complex visualization
+
+        // Simple recording controls
+        document.addEventListener('DOMContentLoaded', function () {
+
+            // Mode selection handling
+            const modeRadios = document.querySelectorAll('input[name="analysis-mode"]');
+            const wordCountConfig = document.getElementById('word-count-config');
+
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    selectedMode = this.value;
+                    if (this.value === 'automatic') {
+                        wordCountConfig.style.display = 'block';
+                    } else {
+                        wordCountConfig.style.display = 'none';
+                    }
+                });
+            });
+
+            // Audio source selection
+            const audioSourceRadios = document.querySelectorAll('input[name="audio-source"]');
+            audioSourceRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    selectedAudioSource = this.value;
+                });
+            });
+
+            // Transcription engine selection
+            const transcriptionEngineRadios = document.querySelectorAll('input[name="transcription-engine"]');
+            transcriptionEngineRadios.forEach(radio => {
+                radio.addEventListener('change', function () {
+                    selectedTranscriptionEngine = this.value;
+                });
+            });
+
+            // Word count presets
+            const presetBtns = document.querySelectorAll('.preset-btn[data-words]');
+            presetBtns.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    presetBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    selectedWordsThreshold = parseInt(this.dataset.words);
+                    document.getElementById('threshold-value').textContent = selectedWordsThreshold;
+                    document.getElementById('custom-words').value = '';
+                });
+            });
+
+            // Initialize Perfect AI socket
+            initializePerfectAISocket();
+
+            // Simple initialization - no complex audio visualization
+
+            // Load recordings list on page load
+            refreshRecordings();
+        });
+
+        // Recordings Management Functions
+        async function refreshRecordings() {
+            try {
+                const response = await fetch('/api/recordings');
+                const data = await response.json();
+                
+                const recordingsList = document.getElementById('recordingsList');
+                
+                if (data.success && data.recordings.length > 0) {
+                    recordingsList.innerHTML = data.recordings.map(recording => `
+                        <div class="recording-item">
+                            <div class="recording-info">
+                                <div class="recording-name">📁 ${recording.filename}</div>
+                                <div class="recording-details">
+                                    📅 ${recording.timestamp} • 💾 ${recording.size_mb.toFixed(2)} MB
+                                </div>
+                            </div>
+                            <div class="recording-actions">
+                                <button class="recording-btn download" onclick="downloadRecording('${recording.filename}')">
+                                    📥 Download
+                                </button>
+                                <button class="recording-btn delete" onclick="deleteRecording('${recording.filename}')">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    recordingsList.innerHTML = `
+                        <div class="no-recordings">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📂</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">No recordings yet</div>
+                            <div>Start a recording session to automatically save audio files</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading recordings:', error);
+                document.getElementById('recordingsList').innerHTML = `
+                    <div class="no-recordings">
+                        <div style="color: var(--danger);">❌ Error loading recordings</div>
+                    </div>
+                `;
+            }
+        }
+
+        function downloadRecording(filename) {
+            window.open(`/api/recordings/${filename}`, '_blank');
+        }
+
+        async function deleteRecording(filename) {
+            if (confirm(`Are you sure you want to delete "${filename}"?`)) {
+                try {
+                    const response = await fetch(`/api/recordings/${filename}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showMessage(`Recording "${filename}" deleted successfully`, 'success');
+                        refreshRecordings();
+                    } else {
+                        showMessage(`Error deleting recording: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting recording:', error);
+                    showMessage('Error deleting recording', 'error');
+                }
+            }
+        }
+
+        function setCustomWords() {
+            const customInput = document.getElementById('custom-words');
+            const value = parseInt(customInput.value);
+
+            if (value && value >= 50 && value <= 5000) {
+                selectedWordsThreshold = value;
+                document.getElementById('threshold-value').textContent = value;
+                document.querySelectorAll('.preset-btn[data-words]').forEach(btn => btn.classList.remove('active'));
+                showMessage(`Perfect AI custom threshold set to ${value} words`, 'success');
+            } else {
+                showMessage('Please enter a value between 50 and 5000', 'error');
+            }
+        }
+
+        function showMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = message;
+            messagesDiv.appendChild(messageDiv);
+
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+
+        async function startPerfectAIRecording() {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '🎯 Starting Perfect AI...';
+            button.disabled = true;
+
+            try {
+                const response = await fetch('/start_recording', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mode: selectedMode,
+                        words_threshold: selectedWordsThreshold,
+                        audio_source: selectedAudioSource,
+                        transcription_engine: selectedTranscriptionEngine,
+                        voice_isolation_level: voiceIsolationLevel,
+                        noise_cancellation_strength: noiseCancellationStrength
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showMessage(result.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Perfect AI start error:', error);
+                showMessage('Error starting Perfect AI recording: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function stopPerfectAIRecording() {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '⏸️ Stopping Perfect AI...';
+            button.disabled = true;
+
+            try {
+                const response = await fetch('/stop_recording', { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage('Perfect AI recording stopped. Generating final analysis...', 'info');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showMessage(result.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Perfect AI stop error:', error);
+                showMessage('Error stopping Perfect AI recording: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function triggerPerfectAIAnalysis() {
+            const button = document.getElementById('analyze-btn');
+            if (!button || button.disabled) return;
+
+            const originalText = button.innerHTML;
+            button.innerHTML = '🧠 Perfect AI Analyzing...';
+            button.disabled = true;
+
+            try {
+                const response = await fetch('/trigger_analysis', { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage('Perfect AI analysis triggered! Check the AI Analysis page for results.', 'success');
+                } else {
+                    showMessage(result.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Perfect AI analysis error:', error);
+                showMessage('Error triggering Perfect AI analysis: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function clearPerfectAIData() {
+            if (!confirm('Are you sure you want to clear all Perfect AI data? This action cannot be undone.')) {
+                return;
+            }
+
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '🗑️ Clearing Perfect AI Data...';
+            button.disabled = true;
+
+            try {
+                const response = await fetch('/clear_data', { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showMessage(result.message, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                console.error('Perfect AI clear error:', error);
+                showMessage('Error clearing Perfect AI data: ' + error.message, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        function showPerfectAIProactiveQuestion(data) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 2rem;
+                right: 2rem;
+                background: var(--gradient-perfect-ai);
+                color: white;
+                padding: 2rem;
+                border-radius: 20px;
+                box-shadow: 0 12px 35px rgba(139, 92, 246, 0.5);
+                z-index: 1001;
+                animation: perfectSlideIn 0.5s ease;
+                cursor: pointer;
+                max-width: 450px;
+                border: 2px solid rgba(255, 255, 255, 0.2);
+            `;
+
+            const shortQuestion = data.question.length > 80 ? data.question.substring(0, 80) + '...' : data.question;
+
+            notification.innerHTML = `
+                <div style="display: flex; align-items: flex-start; gap: 1.5rem;">
+                    <span style="font-size: 2rem; margin-top: 0.2rem;">🎯🤖</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 800; margin-bottom: 0.75rem; font-size: 1.2rem;">Perfect AI Question</div>
+                        <div style="font-size: 1rem; line-height: 1.5; margin-bottom: 1rem;">${shortQuestion}</div>
+                        <div style="font-size: 0.85rem; opacity: 0.9;">
+                            📊 ${data.analysis_context.word_count} words • Question ${data.analysis_context.question_number}/${data.analysis_context.total_questions} • ${data.analysis_context.perfect_ai_confidence}% confidence
+                        </div>
+                        <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.75rem;">Click to go to Analysis page and respond</div>
+                    </div>
+                </div>
+            `;
+
+            notification.onclick = function () {
+                window.location.href = '/analysis';
+            };
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'perfectSlideIn 0.5s ease reverse';
+                    setTimeout(() => notification.remove(), 500);
+                }
+            }, 15000);
+        }
+
+        // Perfect AI animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes perfectSlideIn {
+                from {
+                    transform: translateX(100px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            .preset-btn:hover {
+                border-color: var(--accent);
+                background: #FFF9E6;
+                transform: translateY(-2px);
+            }
+            
+            .preset-btn.active {
+                border-color: var(--accent);
+                background: var(--accent);
+                color: white;
+                transform: translateY(-2px);
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+
+</html>
