@@ -36,6 +36,8 @@ from models import db, init_db, User, RecordingSession, Recording
 from auth import auth_bp
 import json
 import ssl
+from utils.read_segements import read_minute_segments_snapshot
+from live_chat import LiveMeetingChatGrok, render_references
 
 # ================================================================
 # PERFECT AI FLASK APPLICATION SETUP
@@ -142,7 +144,9 @@ app_state = {
     'echo_cancellation_enabled': True,  # For dual mode
     'real_time_insights': True,  # Generate insights during recording
     'proactive_questions_enabled': True,  # AI asks clarifying questions
-    'advanced_metrics': {}  # Store advanced audio metrics
+    'advanced_metrics': {},  # Store advanced audio metrics
+    'recording_file_path': None,
+    'live_chat_instance': None
 }
 
 # ================================================================
@@ -154,6 +158,9 @@ TRANSCRIPT_FILE = os.path.join(TEMP_DIR, "perfect_ai_transcripts.pkl")
 METADATA_FILE = os.path.join(TEMP_DIR, "perfect_ai_metadata.pkl")
 STATS_FILE = os.path.join(TEMP_DIR, "perfect_ai_stats.pkl")
 AUDIO_METRICS_FILE = os.path.join(TEMP_DIR, "perfect_ai_audio_metrics.pkl")
+
+MAX_BYTES_TO_READ = 100_000_000  # 100MB
+APPEND_CITATIONS = True
 
 # ================================================================
 # PERFECT AI DATA PERSISTENCE
@@ -524,13 +531,29 @@ def start_perfect_ai_recording(
         # Store session ID in app state
         app_state['current_session_id'] = session.id
         app_state['recording_session_id'] = session.session_id
-        
+
+        recordings_save_path = Path("recordings") / f"user_{current_user.id}"
+        recordings_save_path.mkdir(parents=True, exist_ok=True)
+
+        recording_file_path = recordings_save_path / f"{session.id}_{session.session_id}.txt"
+
+        app_state['recording_file_path'] = str(recording_file_path)
+
+        app_state['audio_processor'].enable_minute_timestamps(
+            sink='file',
+            file_path=recording_file_path
+        )
+
+        app_state['audio_processor'].set_end_mark_policy("drain_then_mark", window_sec=10.0)
+
         print(f"📊 Session IDs stored - current_session_id: {app_state['current_session_id']}, recording_session_id: {app_state['recording_session_id']}")
         
         # Start perfect AI recording
         print("🎯 Starting Perfect AI recording...")
         success = app_state['audio_processor'].start_recording()
-        
+        if app_state['live_chat_instance'] is None:
+            app_state['live_chat_instance'] = LiveMeetingChatGrok(xai_key)
+
         if not success:
             return {
                 "success": False,
@@ -543,7 +566,7 @@ def start_perfect_ai_recording(
         
         mode_desc = f"every {words_threshold} words" if mode == 'automatic' else "on-demand"
         print("✅ Perfect AI recording started successfully!")
-        
+        app_state['live_chat_instance'].reset_chat()
         return {
             "success": True, 
             "message": f"🎯 Perfect AI recording started with {transcription_engine.replace('_', '-').title()} in {mode.upper()} mode ({mode_desc})!"
@@ -595,7 +618,6 @@ def stop_perfect_ai_recording():
         })
         
         time.sleep(2)  # Allow final processing
-        
         segments = load_transcripts()
         if len(segments) == 0:
             app_state['is_recording'] = False
@@ -1394,15 +1416,35 @@ def chat_with_ai():
             })
         
         # Check if chat instance is available
-        if not app_state.get('chat_instance'):
+        if not app_state.get('chat_instance') and not (app_state['is_recording'] or app_state['is_analyzing']):
             return jsonify({
                 'success': False,
                 'error': 'Chat is not available yet. Please wait for the recording to complete.'
             })
         
+        
         # Get response from chat instance
         try:
-            response = app_state['chat_instance'].chat(message)
+            # Use live chat instance if recording or analyzing
+            if app.state['is_recording'] or app.state['is_analyzing']:
+                if not app_state.get('live_chat_instance'):
+                    raise Exception("Live chat instance not initialized")
+                
+                if not app_state['recording_file_path'] or not os.path.exists(app_state['recording_file_path']):
+                    raise Exception("Recording file not available for live chat")
+                
+                segments =read_minute_segments_snapshot(
+                    app_state['recording_file_path'], 
+                    include_empty_minutes=True,
+                    max_bytes=MAX_BYTES_TO_READ
+                )
+                result = app_state['live_chat_instance'].ask(message, segments=segments)
+                response = result['answer']
+                if APPEND_CITATIONS:
+                    response += render_references(result.get('references', []))
+            # Use standard chat instance otherwise 
+            else:
+                response = app_state['chat_instance'].chat(message)
             return jsonify({
                 'success': True,
                 'response': response,

@@ -1,199 +1,251 @@
-import os
+import json, time, random
+from typing import Dict, List, Tuple, Any
 from openai import OpenAI
-from typing import Dict, List
-from datetime import datetime
+from prompts.system.live_chat import LIVE_SYSTEM_PROMPT
+
 from dotenv import load_dotenv
 
-load_dotenv()
-
-# ============================================================================
-# CONFIGURATION - Now configurable via constructor
-# ============================================================================
-
-# Default values
-DEFAULT_WORDS_PER_ANALYSIS = 200
-DEFAULT_WORDS_PER_ROLLING_SUMMARY = 300
-MAX_PRIOR_SUMMARY_WORDS = 1000
-GROK_MODEL = "grok-4-fast-reasoning"
-
-# ============================================================================
-
-# IT-FOCUSED SYSTEM PROMPT
-SYSTEM_PROMPT = """
-You are a Meeting Analyst AI for ONE SPECIFIC MEETING. You must answer using ONLY the following two sources:
-1) Full Meeting Transcript (verbatim, possibly with timestamps/speaker tags)
-2) Final Analysis of Meeting (post-meeting summary)
-
-No other information, assumptions, prior memory, or web knowledge is allowed. If a user asks for anything outside these two sources, say you don't have that context and ask for the relevant passage.
-
-YOUR GOALS
-1. ANSWER MEETING QUESTIONS: Decisions, action items, owners, dates, blockers, metrics, rationales, who-said-what, etc.
-2. PRODUCE ANALYSES ON DEMAND: Summaries, risks, recommendations, contradictions, timelines, participant lists.
-3. STAY WITHIN SCOPE: This chat is scoped to this single meeting. Do not import info from other meetings or general knowledge.
-
-CONTEXT & EVIDENCE RULES
-- Retrieve ONLY from the two sources above.
-- Every concrete claim MUST include in-text evidence showing exactly where it came from.
-- Evidence format (use at least one per key claim):
-  • [Transcript 00:12:34 — "short quote…"]  (use timestamp if available; else use line/turn number like [Transcript L123 — "…"])
-  • [Final Analysis §Decisions — "short quote…"]  (use section/heading if available)
-- If the two sources conflict, prefer explicit corrections in the Final Analysis; otherwise, use the Transcript and clearly flag the discrepancy.
-- If the answer cannot be found in these sources, reply exactly: Not in the provided meeting context. Optionally ask for a specific excerpt.
-
-INTERACTION STYLE
-- TEXT-ONLY OUTPUT. No JSON, no code blocks unless quoting text from sources.
-- Be concise but complete; prioritize clarity and actionability.
-- Build iteratively on prior turns in THIS chat; do not repeat unchanged points.
-- PRIORITIZE USER-FLAGGED TOPICS: If the user marks something as important (e.g., "focus on this"), analyze it in extra depth and include the sentence: The user flagged this as important, so extra attention is given.
-- Dates/Times: Use the exact dates/times stated in the sources. Do not infer missing dates.
-
-WHAT YOU CAN DO
-- Summarize the meeting or parts of it.
-- Extract decisions, owners, due dates, risks, open questions, follow-ups.
-- Build a timeline of key moments.
-- Compare Transcript vs Final Analysis to find contradictions or omissions.
-- Answer specific queries like "who decided X" or "what's the due date for Y" strictly from the sources.
-
-WHAT YOU MUST NOT DO
-- No outside knowledge or speculation.
-- No hidden assumptions. If ambiguous, ask a precise clarifying question.
-- Do not fabricate participants, metrics, or dates.
-
-RESPONSE STYLE (TEXT ONLY)
-- Start with the direct answer or summary in 1-3 sentences.
-- Follow with brief supporting details as needed.
-- Include evidence inline after the claims using the formats above.
-- If listing items (e.g., action items), simple bullet points are fine—each bullet must include evidence tags.
-- If nothing relevant exists, reply: Not in the provided meeting context.
-
-FAIL-SAFE BEHAVIOR
-- If sources are missing or incomplete, state what's missing and request the exact excerpt needed (timestamp, line, or section).
-- If asked about unrelated topics, respond: This chat is restricted to the provided meeting's Transcript and Final Analysis.
-
-BELOW IS THE FULL TRANSCRIPT AND FINAL ANALYSIS FOR YOUR REFERENCE.
-
-FULL TRANSCRIPT:
-{transcript_text_injected}
-
-FINAL ANALYSIS:
-{final_analysis_injected}
-"""
+load_dotenv()  # take environment variables from .env file
 
 
+GROK_MODEL = "grok-4-fast-reasoning"  # keep your existing model id
 
-class MeetingChatGrok:
-  def __init__(self, api_key_grok: str, latest_transcript: str, latest_analysis: str, system_prompt: str = SYSTEM_PROMPT):
-    self.client = OpenAI(
-        api_key=api_key_grok,
-        base_url="https://api.x.ai/v1"
-    )
-    
-    
-    # Transcript accumulation
-    self.full_transcript: str = latest_transcript
+def _coerce_minute_keys(segments: Dict[str, str]) -> Dict[int, str]:
+    out = {}
+    for k, v in segments.items():
+        try:
+            out[int(k)] = v or ""
+        except Exception:
+            # ignore bad keys
+            continue
+    return out
 
-    # Latest analysis
-    self.latest_analysis: str = latest_analysis
-    
-    self.system_prompt = self._inject_meeting_context(system_prompt)
-    
-    # Meeting metadata
-    self.start_time = datetime.now()
-        
-    self.chat_history: List[Dict[str, str]] = []  # For future chat features
+def _build_window_text(
+    segments: Dict[str, str],
+    end_minute: int | None = None,
+    window_min: int = 15
+) -> Tuple[int, int, str]:
+    """
+    Returns (start_minute, end_minute, window_text) where both ends are inclusive.
+    Picks the latest minute as end if not provided. Clamps to 0..max_minute.
+    """
+    segs = _coerce_minute_keys(segments)
+    if not segs:
+        return 0, 0, "[NO TRANSCRIPT PROVIDED]"
+    if end_minute is None:
+        end_minute = max(segs.keys())
+    max_m = max(segs.keys())
+    end_minute = min(end_minute, max_m)
+    start_minute = max(0, end_minute - (window_min - 1))
+    parts = []
+    for m in range(start_minute, end_minute + 1):
+        if m in segs:
+            parts.append(f"[Minute {m}]\n{segs[m].strip()}\n")
+    window_text = "\n".join(parts).strip() if parts else "[NO TRANSCRIPT IN WINDOW]"
+    return start_minute, end_minute, window_text
 
-  def _inject_meeting_context(self, system_prompt: str) -> str:
-      transcript = (self.full_transcript or "").strip()
-      # Handle both string and dict analysis
-      if isinstance(self.latest_analysis, dict):
-          # Convert dict to formatted string
-          analysis_parts = []
-          for key, value in self.latest_analysis.items():
-              if isinstance(value, list):
-                  analysis_parts.append(f"{key.replace('_', ' ').title()}:\n" + "\n".join(f"- {item}" for item in value))
-              else:
-                  analysis_parts.append(f"{key.replace('_', ' ').title()}: {value}")
-          analysis = "\n\n".join(analysis_parts)
-      else:
-          analysis = (self.latest_analysis or "").strip()
+def _messages_with_system(system_prompt: str, history: List[Dict[str, str]], user_message: str):
+    msgs = []
+    if system_prompt:
+        msgs.append({"role": "system", "content": system_prompt})
+    if history:
+        msgs.extend(history)
+    msgs.append({"role": "user", "content": user_message})
+    return msgs
 
-      template = system_prompt or ""
-      injected = template
-
-      # Detect placeholders
-      has_transcript_token = "{transcript_text_injected}" in template
-      has_analysis_token = "{final_analysis_injected}" in template
-
-      # Replace placeholders if present
-      if has_transcript_token:
-          injected = injected.replace(
-              "{transcript_text_injected}",
-              transcript if transcript else "[NO TRANSCRIPT PROVIDED]"
-          )
-      if has_analysis_token:
-          injected = injected.replace(
-              "{final_analysis_injected}",
-              analysis if analysis else "[NO FINAL ANALYSIS PROVIDED]"
-          )
-
-      # If a token was missing, append that section
-      append_parts = []
-      if not has_transcript_token:
-          append_parts.append(
-              "\n\nFULL TRANSCRIPT:\n" + (transcript if transcript else "[NO TRANSCRIPT PROVIDED]")
-          )
-      if not has_analysis_token:
-          append_parts.append(
-              "\n\nFINAL ANALYSIS:\n" + (analysis if analysis else "[NO FINAL ANALYSIS PROVIDED]")
-          )
-
-      if append_parts:
-          injected = f"{injected.rstrip()}{''.join(append_parts)}"
-
-      # Persist and return
-      return injected
-
-  def send_chat(self, user_message: str) -> str:
-    # Ensure a sane history container: a flat list of {"role","content"} dicts
-    if not hasattr(self, "chat_history") or self.chat_history is None:
-        self.chat_history = []
-
-    # Build the message list to send: [system] + history + new user turn
-    messages = []
-    if self.system_prompt:  # add once per request; don't store it in chat_history
-        messages.append({"role": "system", "content": self.system_prompt})
-
-    # Append prior turns (user/assistant)
-    messages.extend(self.chat_history)
-
-    # Append the new user turn
-    messages.append({"role": "user", "content": user_message})
-
+def _safe_json_parse(s: str) -> Dict[str, Any] | None:
     try:
-        response = self.client.chat.completions.create(
+        return json.loads(s)
+    except Exception:
+        return None
+
+def render_references(citations, *, quote_max=160):
+    """Return a formatted 'References' block from list[dict|str]."""
+    if not citations:
+        return ""
+    lines, seen = [], set()
+
+    for c in citations:
+        # Allow plain strings too
+        if isinstance(c, str):
+            s = c.strip()
+            if s and ("str", s.lower()) not in seen:
+                seen.add(("str", s.lower()))
+                lines.append(f"• {s}")
+            continue
+
+        if not isinstance(c, dict):
+            continue
+
+        minute = c.get("minute")
+        speaker = (c.get("speaker") or "").strip()
+        quote = (c.get("quote") or "").replace("\n", " ").strip()
+
+        if quote_max and len(quote) > quote_max:
+            quote = quote[: quote_max - 1] + "…"
+
+        key = (minute, speaker.lower(), quote.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+
+        if minute is None:
+            lines.append(f"• {speaker} \"{quote}\"".strip())
+        else:
+            lines.append(f"• [Minute {minute}] {speaker} \"{quote}\"".strip())
+
+    # Sort by minute (lines without minute go last)
+    import re
+    def sort_key(line):
+        m = re.search(r"\[Minute (\d+)\]", line)
+        return int(m.group(1)) if m else 10**9
+
+    lines.sort(key=sort_key)
+    return "\n\nReferences:\n" + "\n".join(lines)
+
+class LiveMeetingChatGrok:
+    """
+    Lightweight, CPU-only live chat:
+      - Injects last 15 minutes of transcript into system prompt
+      - Maintains chat history
+      - Retries on API failure (max_retries)
+      - Expands context window in 5-min steps when model signals older context needed
+    """
+
+    def __init__(self, api_key_grok: str, live_system_prompt: str = LIVE_SYSTEM_PROMPT):
+        self.client = OpenAI(api_key=api_key_grok, base_url="https://api.x.ai/v1")
+        self.live_system_template = live_system_prompt
+        self.chat_history: List[Dict[str, str]] = []  # user/assistant only
+        self.last_used_window: Tuple[int, int] | None = None
+
+    def reset_chat(self):
+        self.chat_history = []
+        self.last_used_window = None
+
+    def _call_grok_once(self, messages: List[Dict[str, str]]) -> str:
+        # Single API attempt (no context expansion). Caller handles retries/backoff.
+        resp = self.client.chat.completions.create(
             model=GROK_MODEL,
             messages=messages,
-            temperature=0.5,
-            max_tokens=2000,  # More tokens for comprehensive
+            temperature=0.2,      # tighter for concrete answers
+            max_tokens=2000,       # live answers should be concise
         )
-        assistant_text = response.choices[0].message.content or ""
+        return (resp.choices[0].message.content or "").strip()
+
+    def ask(
+        self,
+        user_message: str,
+        segments: Dict[str, str],
+        *,
+        base_window_min: int = 15,
+        expand_step_min: int = 5,
+        max_attempts: int = 3,
+        api_retry_on_error: int = 3,
+        api_retry_sleep_range: Tuple[float, float] = (0.6, 1.4),
+    ) -> Dict[str, Any]:
+        """
+        Returns a dict:
+          {
+            "answer": str,
+            "citations": [...],
+            "needs_older_context": bool,
+            "attempts": int,
+            "used_window": [start_min, end_min],
+            "raw": str,                    # raw model text (for debugging)
+            "json": dict | None            # parsed json if any
+          }
+        """
+        # Determine the initial end-minute: latest segment available
+        segs_int = _coerce_minute_keys(segments)
+        if not segs_int:
+            final = {
+                "answer": "No transcript available yet.",
+                "citations": [],
+                "needs_older_context": False,
+                "attempts": 1,
+                "used_window": [0, 0],
+                "raw": "",
+                "json": None,
+            }
+            # store turn
+            self.chat_history.append({"role": "user", "content": user_message})
+            self.chat_history.append({"role": "assistant", "content": final["answer"]})
+            return final
+
+        end_m = max(segs_int.keys())
+        start_m, cur_end_m, window_text = _build_window_text(segments, end_minute=end_m, window_min=base_window_min)
+
+        attempts = 0
+        result_json = None
+        raw_text = ""
+        answer_text = ""
+        needs_older = False
+
+        while attempts < max_attempts:
+            attempts += 1
+
+            system_prompt = self.live_system_template.replace("{window_transcript_injected}", window_text)
+            messages = _messages_with_system(system_prompt, self.chat_history, user_message)
+
+            # transient API errors retry
+            api_tries = 0
+            last_err = None
+            while api_tries < api_retry_on_error:
+                try:
+                    raw_text = self._call_grok_once(messages)
+                    break
+                except Exception as e:
+                    last_err = e
+                    api_tries += 1
+                    time.sleep(random.uniform(*api_retry_sleep_range))
+            if api_tries == api_retry_on_error and last_err is not None:
+                # hard fail for this attempt — if we still have attempts left, loop; else return error text
+                raw_text = f'{{"answer":"Temporary error contacting model.","citations":[],"needs_older_context":false,"suggested_shift_minutes":0}}'
+
+            # Expect strict JSON per prompt; still be defensive
+            result_json = _safe_json_parse(raw_text)
+            if not result_json:
+                # model deviated; coerce minimal result
+                answer_text = raw_text
+                needs_older = False
+                break
+
+            # Extract control signals
+            answer_text = str(result_json.get("answer", "")).strip()
+            needs_older = bool(result_json.get("needs_older_context", False))
+            shift = int(result_json.get("suggested_shift_minutes", 0) or 0)
+
+            # If the model says we need older context, expand window backwards
+            if needs_older and start_m > 0:
+                step = shift if shift in (5, 10, 15, 20, 25, 30) else expand_step_min
+                new_start = max(0, start_m - step)
+                if new_start == start_m:
+                    # can't go further back
+                    break
+                start_m = new_start
+                # rebuild window using the SAME end_m (latest minute), but a larger span
+                _, _, window_text = _build_window_text(segments, end_minute=end_m, window_min=(end_m - start_m + 1))
+                continue
+
+            # Otherwise we’re done
+            break
+
+        # Persist only the final turn in chat history (clean)
         self.chat_history.append({"role": "user", "content": user_message})
-        self.chat_history.append({"role": "assistant", "content": assistant_text})
-    except Exception as e:
-        print(f"Error communicating with Grok API: {e}")
+        self.chat_history.append({"role": "assistant", "content": answer_text})
+        self.last_used_window = (start_m, end_m)
 
-    # Persist the new turn to history (store only user & assistant roles)
+        return {
+            "answer": answer_text,
+            "citations": (result_json.get("citations", []) if result_json else []),
+            "needs_older_context": needs_older,
+            "attempts": attempts,
+            "used_window": [start_m, end_m],
+            "raw": raw_text,
+            "json": result_json,
+        }
 
 
-    return assistant_text
-
-  def reset_chat(self, transcript: str = "", analysis: str = "", system_prompt: str = SYSTEM_PROMPT):
-    self.chat_history = []
-    self.full_transcript = transcript
-    self.latest_analysis = analysis
-    self.system_prompt = self._inject_meeting_context(system_prompt)
-
-  
 if __name__ == "__main__":
     import os
     import sys
@@ -212,10 +264,14 @@ if __name__ == "__main__":
     except Exception:
         USE_RICH = False
 
-    def read_text_or_default(p: str, default: str = "") -> str:
+    def read_json_or_default(p: str, default: dict = None) -> dict:
         if p and Path(p).exists():
-            return Path(p).read_text(encoding="utf-8")
-        return default
+            with open(p, "r", encoding="utf-8") as f:
+                try:
+                    return json.load(f)
+                except Exception:
+                    return default or {}
+        return default or {}
 
     parser = argparse.ArgumentParser(description="Meeting Chat (Grok) – interactive CLI")
     parser.add_argument("--title", type=str, default="Meeting Chat (Grok)", help="Title for header")
@@ -223,13 +279,10 @@ if __name__ == "__main__":
 
     api_key = os.getenv("XAI_API_KEY", "your_xai_api_key_here")
     files_dir = Path("temp")
-    latest_transcript = read_text_or_default(files_dir / "latest_transcript.txt", default="")
-    latest_analysis = read_text_or_default(files_dir / "latest_analysis.txt", default="")
+    latest_transcript = read_json_or_default(files_dir / "latest_segments.json", default={})
 
     # Instantiate your chat class (uses your existing __init__)
-    chat = MeetingChatGrok(api_key_grok=api_key,
-                           latest_transcript=latest_transcript,
-                           latest_analysis=latest_analysis)
+    chat = LiveMeetingChatGrok(api_key_grok=api_key)
 
     # ---- Pretty header ----
     if USE_RICH:
@@ -269,7 +322,10 @@ if __name__ == "__main__":
                 continue
 
             # ---- Query the model (non-streaming) ----
-            a = chat.send_chat(q)
+            a = chat.ask(q, segments=latest_transcript)
+            answer = a["answer"]
+            answer += render_references(a.get("citations", []))
+            a = answer
             history.append((q, a))
 
             # ---- Pretty print the answer ----

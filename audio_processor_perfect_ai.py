@@ -713,6 +713,23 @@ class PerfectAIAudioProcessor:
         self._validate_audio_sources()
         
         print("🎯 Perfect AI Audio Processor initialized successfully!")
+
+        # Additional Initialization steps for Timestamps
+        self._timestamping_enabled = False
+        self._transcript_events = []      # combined across all sources
+        self._transcript_lock = threading.Lock()
+        self._recording_start_perf = None
+        self._minute_mark_thread: Optional[threading.Thread] = None
+        self._transcript_sink = 'memory'  # 'memory' | 'file' | 'both'
+        self._transcript_file_path: Optional[str] = None
+
+        self._end_mark_policy = "immediate"   # "immediate" | "align_to_last_event" | "drain_then_mark"
+        self._post_stop_window_sec = 2.0
+        self._final_mark_emitted = False
+        self._finalizer_thread = None
+
+        # track in-flight transcribe jobs for graceful drain
+        self._active_transcribe_jobs = 0
     
     def _validate_audio_sources(self):
         """Validate audio source availability."""
@@ -795,6 +812,21 @@ class PerfectAIAudioProcessor:
         
         self.is_recording = True
         success = False
+
+        import time  # local import to avoid global changes
+
+        # --- ADDITIVE: kick off minute-mark thread if enabled ---
+        if self._timestamping_enabled:
+            self._recording_start_perf = time.perf_counter()
+            with self._transcript_lock:
+                self._transcript_events = []
+            # Start the minute-marker thread
+            self._minute_mark_thread = threading.Thread(
+                target=self._minute_mark_loop,
+                daemon=True
+            )
+            self._minute_mark_thread.start()
+
         
         # Initialize recording file
         self._start_recording_file()
@@ -1048,6 +1080,10 @@ class PerfectAIAudioProcessor:
         """Perfect transcription with advanced voice processing - IMPROVED."""
         import time
         start_time = time.perf_counter()
+
+        if self._timestamping_enabled:
+            with self._transcript_lock:
+                self._active_transcribe_jobs += 1
         
         try:
             # Ensure we have valid buffer
@@ -1086,6 +1122,9 @@ class PerfectAIAudioProcessor:
                     
                     # Call callback
                     self.transcript_callback(transcript_text, source_label)
+                    # --- ADDITIVE: log to combined transcript timeline ---
+                    self._append_transcript_event(kind='text', text=transcript_text, source=source_label)
+
                 else:
                     # Don't log filtered short text to reduce noise
                     pass
@@ -1104,6 +1143,10 @@ class PerfectAIAudioProcessor:
             latency_ms = (end_time - start_time) * 1000
             if latency_ms > 50:  # Only report if latency is significant
                 print(f"⏱️ [{source_label}] Processing latency: {latency_ms:.1f}ms")
+
+            if self._timestamping_enabled:
+                with self._transcript_lock:
+                    self._active_transcribe_jobs = max(0, self._active_transcribe_jobs - 1)
     
     def _simple_whisper_transcribe(self, audio_np: np.ndarray) -> str:
         """Simple Whisper transcription for human vocals."""
@@ -1315,8 +1358,152 @@ class PerfectAIAudioProcessor:
             traceback.print_exc()
             return ""
     
+    # ----------------- Timestamping and Transcript Logging -----------------
+    def enable_minute_timestamps(self, *, sink: str = 'memory', file_path: Optional[str] = None) -> None:
+        """
+        Opt-in to minute marks + combined transcript logging.
+        Args:
+            sink: 'memory' (default), 'file', or 'both'
+            file_path: where to append a rolling transcript if sink includes 'file'
+        """
+        self._timestamping_enabled = True
+        self._transcript_sink = sink
+        self._transcript_file_path = file_path
 
+    def get_combined_transcript(self, as_text: bool = True):
+        """
+        Returns all events (minute marks + text) across Mic/System on one timeline.
+        If as_text=True, returns a pretty string; else returns a list of dicts:
+        {'t': float_seconds, 'ts': 'MM:SS', 'kind': 'mark'|'final_mark'|'text', 'source': str?, 'text': str?}
+        """
+        with self._transcript_lock:
+            events = sorted(self._transcript_events, key=lambda e: e['t'])
+        if not as_text:
+            return events
 
+        lines = []
+        for e in events:
+            if e['kind'] == 'mark':
+                lines.append(f"[{e['ts']}] --- minute mark ---")
+            elif e['kind'] == 'final_mark':
+                lines.append(f"[{e['ts']}] --- end of recording ---")
+            else:
+                src = e.get('source', '')
+                txt = (e.get('text') or '').replace('\n', ' ').strip()
+                lines.append(f"[{e['ts']}][{src}] {txt}")
+        return "\n".join(lines)
+
+    # ----------------- Internals -----------------
+    def _fmt_ts(self, seconds: float) -> str:
+        m = int(seconds // 60)
+        s = int(seconds % 60)
+        return f"{m:02d}:{s:02d}"
+
+    def _append_transcript_event(self, *, kind: str, text: Optional[str] = None,
+                                source: Optional[str] = None, t: Optional[float] = None) -> None:
+        if not self._timestamping_enabled or self._recording_start_perf is None:
+            return
+        import time
+        if t is None:
+            t = time.perf_counter() - self._recording_start_perf
+        event = {'t': float(t), 'ts': self._fmt_ts(float(t)), 'kind': kind}
+        if text is not None:
+            event['text'] = text
+        if source is not None:
+            event['source'] = source
+
+        with self._transcript_lock:
+            self._transcript_events.append(event)
+            if self._transcript_sink in ('file', 'both') and self._transcript_file_path:
+                self._append_event_to_file(event)
+
+    def _append_event_to_file(self, event: dict) -> None:
+        try:
+            if not self._transcript_file_path:
+                return
+            os.makedirs(os.path.dirname(self._transcript_file_path), exist_ok=True)
+            line = ""
+            if event['kind'] == 'mark':
+                line = f"[{event['ts']}] --- minute mark ---\n"
+            elif event['kind'] == 'final_mark':
+                line = f"[{event['ts']}] --- end of recording ---\n"
+            else:
+                src = event.get('source', '')
+                txt = (event.get('text') or '').replace('\n', ' ').strip()
+                line = f"[{event['ts']}][{src}] {txt}\n"
+            with open(self._transcript_file_path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as e:
+            print(f"Transcript file write error: {e}")
+
+    def _minute_mark_loop(self) -> None:
+        """Emits [MM:00] marks exactly every 60s from recording start, and a final mark when recording stops."""
+        import time
+        # initial 00:00
+        self._append_transcript_event(kind='mark', t=0.0)
+        next_mark = 60.0
+        # Sleep in small steps to be resilient to scheduling jitter
+        while self.is_recording:
+            now = time.perf_counter() - (self._recording_start_perf or time.perf_counter())
+            # if we haven't reached the next minute, wait a bit
+            if now + 0.01 < next_mark:
+                time.sleep(min(0.5, max(0.0, next_mark - now)))
+                continue
+            # fire the mark at the exact scheduled boundary
+            self._append_transcript_event(kind='mark', t=next_mark)
+            next_mark += 60.0
+        # after stop, add a final timestamp where the session ended
+        # end_t = max(0.0, time.perf_counter() - (self._recording_start_perf or time.perf_counter()))
+        # self._append_transcript_event(kind='final_mark', t=end_t)
+        end_t = max(0.0, time.perf_counter() - (self._recording_start_perf or time.perf_counter()))
+        self._schedule_final_mark(end_t)
+
+    def set_end_mark_policy(self, policy: str = "align_to_last_event", window_sec: float = 2.0):
+        """
+        policy:
+        - "immediate": (current behavior) mark at stop time instantly.
+        - "align_to_last_event": wait a short window, then place end mark AFTER the last event seen.
+        - "drain_then_mark": wait until queues empty and ASR jobs drop to zero (or timeout), then mark.
+        """
+        assert policy in ("immediate", "align_to_last_event", "drain_then_mark")
+        self._end_mark_policy = policy
+        self._post_stop_window_sec = float(window_sec)
+
+    def _schedule_final_mark(self, stop_t: float):
+        if self._end_mark_policy == "immediate":
+            self._append_transcript_event(kind='final_mark', t=stop_t)
+            self._final_mark_emitted = True
+            return
+        if self._finalizer_thread and self._finalizer_thread.is_alive():
+            return
+        self._finalizer_thread = threading.Thread(
+            target=self._finalize_after_drain, args=(stop_t,), daemon=True
+        )
+        self._finalizer_thread.start()
+
+    def _finalize_after_drain(self, stop_t: float):
+        import time
+        deadline = time.perf_counter() + self._post_stop_window_sec
+
+        if self._end_mark_policy == "drain_then_mark":
+            # wait until mic/system queues empty & jobs finish, or timeout
+            while time.perf_counter() < deadline:
+                if self.mic_queue.empty() and self.system_queue.empty() and self._active_transcribe_jobs == 0:
+                    break
+                time.sleep(0.05)
+        else:
+            # align_to_last_event: passive wait window only
+            time.sleep(max(0.0, self._post_stop_window_sec))
+
+        # place end mark after the last event we have
+        with self._transcript_lock:
+            last_t = stop_t
+            if self._transcript_events:
+                last_t = max(last_t, max(e['t'] for e in self._transcript_events if e['kind'] != 'final_mark'))
+        self._append_transcript_event(kind='final_mark', t=last_t + 1e-3)  # epsilon so it prints last
+        self._final_mark_emitted = True
+
+    # ----------------- Recording File Management (Old Logic) -----------------
     def set_user_id(self, user_id):
         """Set user ID for user-specific recordings."""
         self.user_id = user_id
