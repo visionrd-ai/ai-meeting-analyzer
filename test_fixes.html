@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test JavaScript Fixes</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .pass { background: #e8f5e9; color: #2e7d32; }
+        .fail { background: #ffebee; color: #c62828; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 JavaScript Function Test</h1>
+    
+    <div id="test-results"></div>
+    
+    <button onclick="runTests()">Run Tests</button>
+    <button onclick="testRecordingButton()">Test Recording Button</button>
+    
+    <script>
+        function runTests() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<h3>Test Results:</h3>';
+            
+            const tests = [
+                { name: 'startPerfectAIRecording', func: 'startPerfectAIRecording' },
+                { name: 'stopPerfectAIRecording', func: 'stopPerfectAIRecording' },
+                { name: 'triggerPerfectAIAnalysis', func: 'triggerPerfectAIAnalysis' },
+                { name: 'clearPerfectAIData', func: 'clearPerfectAIData' },
+                { name: 'refreshRecordings', func: 'refreshRecordings' },
+                { name: 'setCustomWords', func: 'setCustomWords' }
+            ];
+            
+            tests.forEach(test => {
+                const exists = typeof window[test.func] === 'function';
+                const className = exists ? 'pass' : 'fail';
+                const status = exists ? '✅ PASS' : '❌ FAIL';
+                
+                results.innerHTML += `<div class="test-result ${className}">${status} ${test.name}</div>`;
+            });
+        }
+        
+        function testRecordingButton() {
+            if (typeof window.startPerfectAIRecording === 'function') {
+                alert('✅ startPerfectAIRecording function is available!');
+            } else {
+                alert('❌ startPerfectAIRecording function is NOT available!');
+            }
+        }
+        
+        // Auto-run tests on load
+        window.onload = runTests;
+    </script>
+</body>
+</html>

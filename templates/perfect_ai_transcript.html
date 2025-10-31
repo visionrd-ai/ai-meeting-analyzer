@@ -549,6 +549,9 @@
             <a href="/analysis" class="nav-link">
                 🤖 AI Analysis
             </a>
+            <a href="/history" class="nav-link">
+                📚 History
+            </a>
         </div>
 
         <!-- Recording Indicator -->
@@ -751,15 +754,29 @@
             socket.on('perfect_final_analysis_complete', function(data) {
                 console.log('🎯 Perfect AI final analysis complete - refreshing transcript page');
                 
-                if (data.refresh_transcript_page) {
-                    // Show a brief notification before refresh
-                    showRefreshNotification();
-                    
-                    // Refresh the page after a short delay
+                // Always refresh when analysis is complete to show updated data
+                showRefreshNotification();
+                
+                // Refresh the page after a short delay
+                setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
+            });
+            
+            socket.on('perfect_analysis_update', function(data) {
+                console.log('🎯 Perfect AI analysis update received');
+                // Auto-refresh to show latest analysis
+                if (data.should_refresh) {
                     setTimeout(function() {
                         window.location.reload();
-                    }, 2000);
+                    }, 1000);
                 }
+            });
+            
+            socket.on('auth_required', function(data) {
+                console.log('🔒 Authentication required');
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/auth/login';
             });
         }
 
@@ -1038,6 +1055,13 @@
                     }
                 }
             }, 1000);
+            
+            // Periodic sync to ensure data is up to date
+            setInterval(() => {
+                if (socket && socket.connected) {
+                    socket.emit('request_perfect_status');
+                }
+            }, 10000); // Sync every 10 seconds
         });
 
         // Perfect AI animations

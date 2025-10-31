@@ -25,19 +25,75 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_socketio import SocketIO, emit
+from flask_login import LoginManager, login_required, current_user
 from audio_processor_perfect_ai import PerfectAIAudioProcessor
 from summarizer import MeetingSummarizer
 import threading
 from grok_chat import MeetingChatGrok
+from models import db, init_db, User, RecordingSession, Recording
+from auth import auth_bp
+import json
+import ssl
 
 # ================================================================
 # PERFECT AI FLASK APPLICATION SETUP
 # ================================================================
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+
+# Security headers for HTTPS and microphone access
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to enable microphone access and secure connection."""
+    # Force HTTPS in production
+    if not app.debug:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
+    # Allow microphone access
+    response.headers['Permissions-Policy'] = 'microphone=*, camera=*, geolocation=*'
+    
+    # Content Security Policy - allow microphone access and fix font issues
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: wss: ws:; "
+        "media-src 'self' blob: data:; "
+        "connect-src 'self' https: wss: ws:; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' 'unsafe-inline' data: https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:;"
+    )
+    
+    # Additional security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    
+    return response
+
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///perfect_ai.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize database
+init_db(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login_page'
+login_manager.login_message = 'Please log in to access Perfect AI Meeting Analyzer.'
+login_manager.login_message_category = 'info'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Register authentication blueprint
+app.register_blueprint(auth_bp, url_prefix='/auth')
 
 # Initialize SocketIO with perfect performance settings and better connection handling
 socketio = SocketIO(
@@ -239,6 +295,53 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
         segments.append(formatted_text)
         save_transcripts(segments)
         
+        # Save to database if we have an active session
+        if app_state.get('current_session_id'):
+            try:
+                # Use application context for database operations from background thread
+                with app.app_context():
+                    session_id = app_state['current_session_id']
+                    print(f"🔍 Looking for session ID: {session_id}")
+                    
+                    session = RecordingSession.query.get(session_id)
+                    if session:
+                        print(f"✅ Found session: {session.session_id}")
+                        
+                        # Update transcript text
+                        session.transcript_text = "\n".join(segments)
+                        
+                        # Update transcript segments (JSON)
+                        import json
+                        segment_data = {
+                            'text': formatted_text,
+                            'source': source_label,
+                            'timestamp': datetime.now().isoformat()
+                        }
+                        
+                        # Get existing segments or create new list
+                        existing_segments = json.loads(session.transcript_segments) if session.transcript_segments else []
+                        existing_segments.append(segment_data)
+                        session.transcript_segments = json.dumps(existing_segments)
+                        
+                        # Update counts
+                        full_text = " ".join(segments)
+                        session.total_words = len(full_text.split())
+                        session.total_segments = len(segments)
+                        
+                        # Update session duration in real-time
+                        if session.started_at:
+                            current_duration = (datetime.utcnow() - session.started_at).total_seconds()
+                            session.duration_seconds = int(current_duration)
+                        
+                        db.session.commit()
+                        print(f"📊 Session updated: {session.total_words} words, {session.total_segments} segments, {session.duration_seconds}s")
+                    else:
+                        print(f"❌ Session not found with ID: {session_id}")
+            except Exception as db_error:
+                print(f"❌ Database save error: {db_error}")
+                import traceback
+                traceback.print_exc()
+        
         # Calculate perfect AI metrics
         metrics = calculate_perfect_ai_metrics()
         
@@ -272,13 +375,39 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
                     app_state['current_analysis'] = analysis
                     print("✅ Perfect AI automatic analysis updated")
                     
+                    # Save current analysis to database
+                    if app_state.get('current_session_id'):
+                        try:
+                            # Use application context for database operations from background thread
+                            with app.app_context():
+                                session_id = app_state['current_session_id']
+                                print(f"🔍 Saving analysis for session ID: {session_id}")
+                                
+                                session = RecordingSession.query.get(session_id)
+                                if session:
+                                    print(f"✅ Found session for analysis: {session.session_id}")
+                                    
+                                    import json
+                                    session.current_analysis = json.dumps(analysis)
+                                    session.analysis_word_count = len(text.split())
+                                    session.analysis_confidence = calculate_analysis_confidence(analysis)
+                                    db.session.commit()
+                                    print("✅ Current analysis saved to database")
+                                else:
+                                    print(f"❌ Session not found for analysis with ID: {session_id}")
+                        except Exception as db_error:
+                            print(f"❌ Database save error for current analysis: {db_error}")
+                            import traceback
+                            traceback.print_exc()
+                    
                     # Emit perfect AI analysis update with better error handling
                     try:
                         socketio.emit('perfect_analysis_update', {
                             'analysis': analysis,
                             'is_final': False,
                             'timestamp': datetime.now().strftime("%H:%M:%S"),
-                            'perfect_ai_confidence': calculate_analysis_confidence(analysis)
+                            'perfect_ai_confidence': calculate_analysis_confidence(analysis),
+                            'should_refresh': True  # Signal to refresh for real-time updates
                         })
                         print(f"✅ Perfect AI analysis update sent successfully")
                     except Exception as e:
@@ -375,6 +504,29 @@ def start_perfect_ai_recording(
         }
         save_metadata(metadata)
         
+        # Set user ID for user-specific recordings
+        app_state['audio_processor'].set_user_id(current_user.id)
+        
+        # Create new recording session in database
+        session = RecordingSession(
+            user_id=current_user.id,
+            audio_source=audio_source,
+            transcription_engine=transcription_engine,
+            analysis_mode=mode,
+            word_threshold=words_threshold,
+            title=f"Meeting Session - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        db.session.add(session)
+        db.session.commit()
+        
+        print(f"✅ Created new session: ID={session.id}, UUID={session.session_id}, User={current_user.id}")
+        
+        # Store session ID in app state
+        app_state['current_session_id'] = session.id
+        app_state['recording_session_id'] = session.session_id
+        
+        print(f"📊 Session IDs stored - current_session_id: {app_state['current_session_id']}, recording_session_id: {app_state['recording_session_id']}")
+        
         # Start perfect AI recording
         print("🎯 Starting Perfect AI recording...")
         success = app_state['audio_processor'].start_recording()
@@ -412,6 +564,22 @@ def stop_perfect_ai_recording():
         # Stop perfect AI audio processing
         if app_state['audio_processor']:
             app_state['audio_processor'].stop_recording()
+        
+        # Finalize current session
+        if app_state.get('current_session_id'):
+            try:
+                # Use application context for database operations
+                with app.app_context():
+                    session = RecordingSession.query.get(app_state['current_session_id'])
+                    if session and not session.ended_at:
+                        session.ended_at = datetime.utcnow()
+                        if session.started_at:
+                            duration = (session.ended_at - session.started_at).total_seconds()
+                            session.duration_seconds = int(duration)
+                        db.session.commit()
+                        print(f"📊 Session finalized: {session.duration_seconds} seconds")
+            except Exception as e:
+                print(f"Error finalizing session: {e}")
         
         app_state['is_analyzing'] = True
         app_state['analysis_start_time'] = datetime.now()
@@ -459,6 +627,39 @@ def stop_perfect_ai_recording():
                         app_state['first_recording_done'] = True
                     
                     print("✅ Perfect AI final summary generated")
+                    
+                    # Save final analysis to database
+                    if app_state.get('current_session_id'):
+                        try:
+                            # Use application context for database operations from background thread
+                            with app.app_context():
+                                session_id = app_state['current_session_id']
+                                print(f"🔍 Saving final analysis for session ID: {session_id}")
+                                
+                                session = RecordingSession.query.get(session_id)
+                                if session:
+                                    print(f"✅ Found session for final analysis: {session.session_id}")
+                                    
+                                    import json
+                                    session.final_analysis = json.dumps(app_state['final_summary'])
+                                    session.analysis_generated_at = datetime.utcnow()
+                                    session.analysis_word_count = len(full_transcript.split())
+                                    session.analysis_confidence = 95.0
+                                    session.ended_at = datetime.utcnow()
+                                    
+                                    # Calculate duration
+                                    if session.started_at:
+                                        duration = (session.ended_at - session.started_at).total_seconds()
+                                        session.duration_seconds = int(duration)
+                                    
+                                    db.session.commit()
+                                    print("✅ Final analysis saved to database")
+                                else:
+                                    print(f"❌ Session not found for final analysis with ID: {session_id}")
+                        except Exception as db_error:
+                            print(f"❌ Database save error for final analysis: {db_error}")
+                            import traceback
+                            traceback.print_exc()
                     
                     app_state['chat_locked'] = False
                     
@@ -561,6 +762,31 @@ def trigger_perfect_ai_manual_analysis():
             
             if analysis:
                 app_state['current_analysis'] = analysis
+                
+                # Save manual analysis to database
+                if app_state.get('current_session_id'):
+                    try:
+                        # Use application context for database operations from background thread
+                        with app.app_context():
+                            session_id = app_state['current_session_id']
+                            print(f"🔍 Saving manual analysis for session ID: {session_id}")
+                            
+                            session = RecordingSession.query.get(session_id)
+                            if session:
+                                print(f"✅ Found session for manual analysis: {session.session_id}")
+                                
+                                import json
+                                session.current_analysis = json.dumps(analysis)
+                                session.analysis_word_count = word_count
+                                session.analysis_confidence = calculate_analysis_confidence(analysis)
+                                db.session.commit()
+                                print("✅ Manual analysis saved to database")
+                            else:
+                                print(f"❌ Session not found for manual analysis with ID: {session_id}")
+                    except Exception as db_error:
+                        print(f"❌ Database save error for manual analysis: {db_error}")
+                        import traceback
+                        traceback.print_exc()
                 
                 # Emit perfect AI analysis complete
                 socketio.emit('perfect_analysis_complete', {
@@ -715,6 +941,7 @@ def send_perfect_ai_proactive_questions(analysis):
 # ================================================================
 
 @app.route('/')
+@login_required
 def index():
     """Perfect AI Configuration & Recording Controls."""
     metrics = calculate_perfect_ai_metrics()
@@ -746,6 +973,7 @@ def index():
     return render_template('perfect_ai_config.html', **template_data)
 
 @app.route('/transcript')
+@login_required
 def transcript():
     """Perfect AI Live Transcript."""
     metrics = calculate_perfect_ai_metrics()
@@ -774,6 +1002,7 @@ def transcript():
     return render_template('perfect_ai_transcript.html', **template_data)
 
 @app.route('/analysis')
+@login_required
 def analysis():
     """Perfect AI Analysis."""
     metrics = calculate_perfect_ai_metrics()
@@ -806,29 +1035,59 @@ def analysis():
 @app.route('/start_recording', methods=['POST'])
 def start_recording_route():
     """Perfect AI start recording endpoint."""
-    data = request.get_json() or {}
-    mode = data.get('mode', 'automatic')
-    words_threshold = data.get('words_threshold', 200)
-    audio_source = data.get('audio_source', 'mic')
-    transcription_engine = data.get('transcription_engine', 'faster_whisper')
-    voice_isolation_level = data.get('voice_isolation_level', 'maximum')
-    noise_cancellation_strength = data.get('noise_cancellation_strength', 'aggressive')
+    # Check authentication for AJAX requests
+    if not current_user.is_authenticated:
+        return jsonify({
+            'success': False,
+            'error': 'Authentication required',
+            'redirect': url_for('auth.login_page')
+        }), 401
     
-    result = start_perfect_ai_recording(
-        mode=mode, 
-        words_threshold=words_threshold, 
-        audio_source=audio_source,
-        transcription_engine=transcription_engine,
-        voice_isolation_level=voice_isolation_level,
-        noise_cancellation_strength=noise_cancellation_strength
-    )
-    return jsonify(result)
+    try:
+        data = request.get_json() or {}
+        mode = data.get('mode', 'automatic')
+        words_threshold = data.get('words_threshold', 200)
+        audio_source = data.get('audio_source', 'mic')
+        transcription_engine = data.get('transcription_engine', 'faster_whisper')
+        voice_isolation_level = data.get('voice_isolation_level', 'maximum')
+        noise_cancellation_strength = data.get('noise_cancellation_strength', 'aggressive')
+        
+        result = start_perfect_ai_recording(
+            mode=mode, 
+            words_threshold=words_threshold, 
+            audio_source=audio_source,
+            transcription_engine=transcription_engine,
+            voice_isolation_level=voice_isolation_level,
+            noise_cancellation_strength=noise_cancellation_strength
+        )
+        return jsonify(result)
+    except Exception as e:
+        print(f"Start recording error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Recording start failed: {str(e)}'
+        }), 500
 
 @app.route('/stop_recording', methods=['POST'])
 def stop_recording_route():
     """Perfect AI stop recording endpoint."""
-    result = stop_perfect_ai_recording()
-    return jsonify(result)
+    # Check authentication for AJAX requests
+    if not current_user.is_authenticated:
+        return jsonify({
+            'success': False,
+            'error': 'Authentication required',
+            'redirect': url_for('auth.login_page')
+        }), 401
+    
+    try:
+        result = stop_perfect_ai_recording()
+        return jsonify(result)
+    except Exception as e:
+        print(f"Stop recording error: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Recording stop failed: {str(e)}'
+        }), 500
 
 @app.route('/trigger_analysis', methods=['POST'])
 def trigger_analysis_route():
@@ -856,6 +1115,7 @@ def clear_data_route():
     })
 
 @app.route('/api/status')
+@login_required
 def get_status():
     """Perfect AI status endpoint."""
     metrics = calculate_perfect_ai_metrics()
@@ -878,14 +1138,35 @@ def get_status():
     })
 
 @app.route('/api/transcript')
+@login_required
 def get_transcript():
-    """Perfect AI transcript endpoint."""
-    segments = load_transcripts()
+    """Perfect AI transcript endpoint - user-specific data only."""
+    # Only return transcript data for the current user's session
+    if app_state['recording_session_id']:
+        # Get session from database to verify ownership
+        session = RecordingSession.query.filter_by(
+            session_id=app_state['recording_session_id'],
+            user_id=current_user.id
+        ).first()
+        
+        if session:
+            segments = load_transcripts()
+            return jsonify({
+                'segments': segments,
+                'full_text': " ".join(segments),
+                'segment_count': len(segments),
+                'perfect_ai_processed': True,
+                'user_id': current_user.id,
+                'session_id': app_state['recording_session_id']
+            })
+    
+    # Return empty data if no valid session
     return jsonify({
-        'segments': segments,
-        'full_text': " ".join(segments),
-        'segment_count': len(segments),
-        'perfect_ai_processed': True
+        'segments': [],
+        'full_text': "",
+        'segment_count': 0,
+        'perfect_ai_processed': True,
+        'user_id': current_user.id
     })
 
 # ================================================================
@@ -894,9 +1175,15 @@ def get_transcript():
 
 @socketio.on('connect')
 def handle_connect():
-    """Handle Perfect AI client connection with better error handling."""
+    """Handle Perfect AI client connection with authentication check."""
     try:
-        print(f"🔗 Perfect AI client connected: {request.sid}")
+        # Check if user is authenticated
+        if not current_user.is_authenticated:
+            print(f"❌ Unauthenticated client connection attempt: {request.sid}")
+            emit('auth_required', {'message': 'Authentication required'})
+            return False
+        
+        print(f"🔗 Perfect AI client connected: {request.sid} (User: {current_user.username})")
         
         metrics = calculate_perfect_ai_metrics()
         status_data = {
@@ -908,11 +1195,12 @@ def handle_connect():
             'perfect_ai_enabled': app_state['perfect_ai_enabled'],
             'voice_isolation_level': app_state['voice_isolation_level'],
             'noise_cancellation_strength': app_state['noise_cancellation_strength'],
+            'user_id': current_user.id,
             **metrics
         }
         
         emit('perfect_status_update', status_data)
-        print(f"✅ Status update sent to client: {request.sid}")
+        print(f"✅ Status update sent to authenticated client: {request.sid}")
         
     except Exception as e:
         print(f"❌ Error handling client connection: {e}")
@@ -932,9 +1220,15 @@ def handle_disconnect():
 
 @socketio.on('request_perfect_status')
 def handle_perfect_status_request():
-    """Handle Perfect AI status request with better error handling."""
+    """Handle Perfect AI status request with authentication check."""
     try:
-        print(f"📊 Status request from client: {request.sid}")
+        # Check if user is authenticated
+        if not current_user.is_authenticated:
+            print(f"❌ Unauthenticated status request: {request.sid}")
+            emit('auth_required', {'message': 'Authentication required'})
+            return False
+        
+        print(f"📊 Status request from client: {request.sid} (User: {current_user.username})")
         
         metrics = calculate_perfect_ai_metrics()
         status_data = {
@@ -948,11 +1242,12 @@ def handle_perfect_status_request():
             'perfect_ai_enabled': app_state['perfect_ai_enabled'],
             'voice_isolation_level': app_state['voice_isolation_level'],
             'noise_cancellation_strength': app_state['noise_cancellation_strength'],
+            'user_id': current_user.id,
             **metrics
         }
         
         emit('perfect_status_update', status_data)
-        print(f"✅ Status response sent to client: {request.sid}")
+        print(f"✅ Status response sent to authenticated client: {request.sid}")
         
     except Exception as e:
         print(f"❌ Error handling status request: {e}")
@@ -1001,14 +1296,16 @@ def initialize_perfect_ai_app():
 # ================================================================
 
 @app.route('/api/recordings')
+@login_required
 def get_recordings():
     """Get list of saved recordings."""
     try:
         if app_state['audio_processor']:
-            recordings = app_state['audio_processor'].get_saved_recordings()
+            recordings = app_state['audio_processor'].get_saved_recordings(user_id=current_user.id)
             return jsonify({
                 'success': True,
-                'recordings': recordings
+                'recordings': recordings,
+                'user_id': current_user.id
             })
         else:
             return jsonify({
@@ -1022,21 +1319,32 @@ def get_recordings():
         })
 
 @app.route('/api/recordings/<filename>')
+@login_required
 def download_recording(filename):
     """Download a specific recording file."""
     try:
         if app_state['audio_processor']:
             recordings_dir = app_state['audio_processor'].recordings_dir
-            filepath = os.path.join(recordings_dir, filename)
             
-            if os.path.exists(filepath) and filename.endswith('.wav'):
+            # Check user-specific directory first
+            user_dir = os.path.join(recordings_dir, f"user_{current_user.id}")
+            user_filepath = os.path.join(user_dir, filename)
+            
+            # Check if file exists in user directory
+            if os.path.exists(user_filepath) and filename.endswith('.wav'):
                 from flask import send_file
-                return send_file(filepath, as_attachment=True, download_name=filename)
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Recording file not found'
-                }), 404
+                return send_file(user_filepath, as_attachment=True, download_name=filename)
+            
+            # Fallback to main directory (for backward compatibility)
+            main_filepath = os.path.join(recordings_dir, filename)
+            if os.path.exists(main_filepath) and filename.endswith('.wav'):
+                from flask import send_file
+                return send_file(main_filepath, as_attachment=True, download_name=filename)
+            
+            return jsonify({
+                'success': False,
+                'error': 'Recording file not found or access denied'
+            }), 404
         else:
             return jsonify({
                 'success': False,
@@ -1049,14 +1357,16 @@ def download_recording(filename):
         }), 500
 
 @app.route('/api/recordings/<filename>', methods=['DELETE'])
+@login_required
 def delete_recording(filename):
     """Delete a specific recording file."""
     try:
         if app_state['audio_processor']:
-            success = app_state['audio_processor'].delete_recording(filename)
+            success = app_state['audio_processor'].delete_recording(filename, user_id=current_user.id)
             return jsonify({
                 'success': success,
-                'message': f'Recording {"deleted" if success else "not found"}'
+                'message': f'Recording {"deleted" if success else "not found or access denied"}',
+                'user_id': current_user.id
             })
         else:
             return jsonify({
@@ -1070,6 +1380,7 @@ def delete_recording(filename):
         })
 
 @app.route('/api/chat', methods=['POST'])
+@login_required
 def chat_with_ai():
     """Handle chat requests with the AI assistant."""
     try:
@@ -1111,6 +1422,208 @@ def chat_with_ai():
             'error': 'Sorry, I encountered an error. Please try again.'
         })
 
+@app.route('/test')
+def test_route():
+    """Simple test route to verify app is working."""
+    return "Test route is working!"
+
+@app.route('/debug')
+@login_required
+def debug_recording():
+    """Debug page for recording issues."""
+    with open('debug_recording.html', 'r') as f:
+        return f.read()
+
+@app.route('/test-fixes')
+def test_fixes():
+    """Test page for JavaScript fixes."""
+    with open('test_fixes.html', 'r') as f:
+        return f.read()
+
+@app.route('/test_db')
+@login_required
+def test_db():
+    """Test database connectivity and session creation."""
+    try:
+        # Test basic database query
+        user_count = User.query.count()
+        session_count = RecordingSession.query.filter_by(user_id=current_user.id).count()
+        
+        # Test session creation
+        test_session = RecordingSession(
+            user_id=current_user.id,
+            title="Test Session",
+            audio_source="mic",
+            transcription_engine="faster_whisper"
+        )
+        db.session.add(test_session)
+        db.session.commit()
+        
+        # Test session retrieval
+        retrieved_session = RecordingSession.query.get(test_session.id)
+        
+        # Clean up test session
+        db.session.delete(test_session)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Database test successful',
+            'user_count': user_count,
+            'user_sessions': session_count,
+            'test_session_id': retrieved_session.id if retrieved_session else None
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/history')
+@login_required
+def history():
+    """User session history page."""
+    print(f"📚 History page accessed by user: {current_user.username}")
+    try:
+        # Get user's sessions
+        sessions = RecordingSession.query.filter_by(
+            user_id=current_user.id
+        ).order_by(RecordingSession.started_at.desc()).all()
+        
+        print(f"📚 Found {len(sessions)} sessions for user {current_user.id}")
+        
+        # Calculate statistics
+        total_sessions = len(sessions)
+        total_words = sum(s.total_words or 0 for s in sessions)
+        total_duration = sum(s.duration_seconds or 0 for s in sessions)
+        total_recordings = sum(len(s.recordings) if s.recordings else 0 for s in sessions)
+        
+        # Format duration
+        hours = total_duration // 3600
+        minutes = (total_duration % 3600) // 60
+        if hours > 0:
+            duration_formatted = f"{hours}h {minutes}m"
+        else:
+            duration_formatted = f"{minutes}m"
+        
+        stats = {
+            'total_sessions': total_sessions,
+            'total_words': total_words,
+            'total_duration': duration_formatted,
+            'total_recordings': total_recordings
+        }
+        
+        # Convert sessions to dict
+        sessions_data = [s.to_dict() for s in sessions]
+        
+        print(f"📚 Rendering history page with {len(sessions_data)} sessions")
+        return render_template('history.html', 
+                             sessions=sessions_data, 
+                             stats=stats)
+        
+    except Exception as e:
+        print(f"History page error: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('history.html', 
+                             sessions=[], 
+                             stats={'total_sessions': 0, 'total_words': 0, 'total_duration': '0m', 'total_recordings': 0})
+
+@app.route('/api/session/<session_id>/transcript')
+@login_required
+def get_session_transcript(session_id):
+    """Get transcript for a specific session."""
+    try:
+        session = RecordingSession.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            })
+        
+        return jsonify({
+            'success': True,
+            'transcript': session.transcript_text,
+            'segments': json.loads(session.transcript_segments) if session.transcript_segments else []
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/session/<session_id>/analysis')
+@login_required
+def get_session_analysis(session_id):
+    """Get analysis for a specific session."""
+    try:
+        session = RecordingSession.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            })
+        
+        analysis = None
+        if session.final_analysis:
+            analysis = json.loads(session.final_analysis)
+        elif session.current_analysis:
+            analysis = json.loads(session.current_analysis)
+        
+        return jsonify({
+            'success': True,
+            'analysis': analysis
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/download/session/<session_id>/recordings')
+@login_required
+def download_session_recordings(session_id):
+    """Download all recordings for a session as a ZIP file."""
+    try:
+        session = RecordingSession.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            }), 404
+        
+        if not session.recordings:
+            return jsonify({
+                'success': False,
+                'error': 'No recordings found for this session'
+            }), 404
+        
+        # For now, redirect to the first recording
+        # In a full implementation, you'd create a ZIP file
+        first_recording = session.recordings[0]
+        return redirect(url_for('download_recording', filename=first_recording.filename))
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # ================================================================
 # PERFECT AI MAIN ENTRY POINT
 # ================================================================
@@ -1119,9 +1632,110 @@ if __name__ == '__main__':
     initialize_perfect_ai_app()
     
     print("🚀 Starting Perfect AI SocketIO server...")
-    socketio.run(
-        app,
-        debug=True,
-        host='0.0.0.0',
-        port=5000
-    )
+    
+    # Check if SSL certificates exist for HTTPS
+    cert_file = 'cert.pem'
+    key_file = 'key.pem'
+    
+    # Generate self-signed certificate if not exists
+    if not os.path.exists(cert_file) or not os.path.exists(key_file):
+        print("🔒 Generating self-signed SSL certificate for HTTPS...")
+        try:
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import rsa
+            import datetime
+            import ipaddress
+            
+            # Generate private key
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+            )
+            
+            # Create certificate
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Local"),
+                x509.NameAttribute(NameOID.LOCALITY_NAME, "Local"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Perfect AI"),
+                x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+            ])
+            
+            cert = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                issuer
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                datetime.datetime.utcnow()
+            ).not_valid_after(
+                datetime.datetime.utcnow() + datetime.timedelta(days=365)
+            ).add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName("localhost"),
+                    x509.DNSName("127.0.0.1"),
+                    x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                ]),
+                critical=False,
+            ).sign(private_key, hashes.SHA256())
+            
+            # Write certificate and key files
+            with open(cert_file, "wb") as f:
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
+            
+            with open(key_file, "wb") as f:
+                f.write(private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                ))
+            
+            print("✅ SSL certificate generated successfully!")
+            
+        except ImportError:
+            print("⚠️ cryptography package not found. Installing...")
+            os.system("pip install cryptography")
+            print("🔄 Please restart the application to generate SSL certificate.")
+            exit(1)
+        except Exception as e:
+            print(f"❌ Failed to generate SSL certificate: {e}")
+            print("🌐 Starting without HTTPS (microphone may not work in some browsers)")
+            socketio.run(
+                app,
+                debug=True,
+                host='0.0.0.0',
+                port=5000
+            )
+            exit()
+    
+    # Start server with HTTPS
+    try:
+        print("🔒 Starting HTTPS server for secure microphone access...")
+        print("🌐 Open https://localhost:5000 in your browser")
+        print("⚠️ You may need to accept the self-signed certificate warning")
+        
+        # Create SSL context
+        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+        context.load_cert_chain(cert_file, key_file)
+        
+        socketio.run(
+            app,
+            debug=True,
+            host='0.0.0.0',
+            port=5000,
+            ssl_context=context
+        )
+    except Exception as e:
+        print(f"❌ HTTPS server failed: {e}")
+        print("🌐 Falling back to HTTP server...")
+        socketio.run(
+            app,
+            debug=True,
+            host='0.0.0.0',
+            port=5000
+        )

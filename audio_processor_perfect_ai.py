@@ -658,9 +658,10 @@ class PerfectAIAudioProcessor:
         # Recording file management
         self.recording_data = []
         self.recording_filename = None
+        self.user_id = None  # Will be set when user logs in
         self.recordings_dir = "recordings"
         
-        # Create recordings directory if it doesn't exist
+        # Create base recordings directory if it doesn't exist
         if not os.path.exists(self.recordings_dir):
             os.makedirs(self.recordings_dir)
         
@@ -1119,16 +1120,32 @@ class PerfectAIAudioProcessor:
             if max_val > 0:
                 audio_np = audio_np / max_val * 0.9
             
-            # Simple Whisper transcription
-            segments, info = self.whisper_model.transcribe(
-                audio_np,
-                beam_size=1,
-                language="en",
-                vad_filter=False,
-                temperature=0.0,
-                condition_on_previous_text=False,
-                word_timestamps=False
-            )
+            # Improved Whisper transcription with fallback for compatibility
+            try:
+                segments, info = self.whisper_model.transcribe(
+                    audio_np,
+                    beam_size=3,  # Better accuracy
+                    language="en",
+                    vad_filter=True,  # Enable VAD for better segmentation
+                    vad_parameters=dict(
+                        min_silence_duration_ms=500,
+                        speech_pad_ms=200
+                    ),
+                    temperature=0.0,
+                    condition_on_previous_text=True,  # Better context
+                    word_timestamps=False,
+                    no_speech_threshold=0.3,
+                    compression_ratio_threshold=2.4
+                )
+            except TypeError as e:
+                # Fallback for older versions with fewer parameters
+                print(f"⚠️ Using fallback transcription due to parameter compatibility: {e}")
+                segments, info = self.whisper_model.transcribe(
+                    audio_np,
+                    beam_size=3,
+                    language="en",
+                    temperature=0.0
+                )
             
             # Simple text extraction
             transcript_parts = []
@@ -1139,13 +1156,26 @@ class PerfectAIAudioProcessor:
             
             transcript_text = " ".join(transcript_parts)
             
-            # Post-process the transcript
+            # Enhanced post-processing for better quality
             if transcript_text:
-                # Remove common Whisper artifacts
+                # Remove common artifacts and repetitions
                 transcript_text = transcript_text.replace(" uh ", " ")
                 transcript_text = transcript_text.replace(" um ", " ")
+                transcript_text = transcript_text.replace(" ah ", " ")
                 transcript_text = transcript_text.replace("  ", " ")
-                transcript_text = transcript_text.strip()
+                
+                # Fix common repetition patterns
+                words = transcript_text.split()
+                cleaned_words = []
+                prev_word = ""
+                
+                for word in words:
+                    # Skip if same word repeated more than 2 times
+                    if word.lower() != prev_word.lower() or len(cleaned_words) < 2 or cleaned_words[-1].lower() != word.lower():
+                        cleaned_words.append(word)
+                    prev_word = word
+                
+                transcript_text = " ".join(cleaned_words).strip()
             
             return transcript_text
             
@@ -1287,12 +1317,27 @@ class PerfectAIAudioProcessor:
     
 
 
+    def set_user_id(self, user_id):
+        """Set user ID for user-specific recordings."""
+        self.user_id = user_id
+        # Create user-specific directory
+        if user_id:
+            user_dir = os.path.join(self.recordings_dir, f"user_{user_id}")
+            if not os.path.exists(user_dir):
+                os.makedirs(user_dir)
+    
     def _start_recording_file(self):
         """Initialize recording file for this session."""
         try:
             # Generate unique filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.recording_filename = os.path.join(self.recordings_dir, f"recording_{timestamp}.wav")
+            
+            # Use user-specific directory if user is set
+            if self.user_id:
+                user_dir = os.path.join(self.recordings_dir, f"user_{self.user_id}")
+                self.recording_filename = os.path.join(user_dir, f"recording_{timestamp}.wav")
+            else:
+                self.recording_filename = os.path.join(self.recordings_dir, f"recording_{timestamp}.wav")
             
             # Clear recording data
             self.recording_data = []
@@ -1349,16 +1394,23 @@ class PerfectAIAudioProcessor:
             
         return None
     
-    def get_saved_recordings(self):
-        """Get list of saved recording files."""
+    def get_saved_recordings(self, user_id=None):
+        """Get list of saved recording files, optionally filtered by user."""
         try:
-            if not os.path.exists(self.recordings_dir):
+            # If user_id is provided, look in user-specific directory
+            if user_id and self.user_id == user_id:
+                user_dir = os.path.join(self.recordings_dir, f"user_{user_id}")
+                search_dir = user_dir if os.path.exists(user_dir) else self.recordings_dir
+            else:
+                search_dir = self.recordings_dir
+            
+            if not os.path.exists(search_dir):
                 return []
             
             recordings = []
-            for filename in os.listdir(self.recordings_dir):
+            for filename in os.listdir(search_dir):
                 if filename.endswith('.wav'):
-                    filepath = os.path.join(self.recordings_dir, filename)
+                    filepath = os.path.join(search_dir, filename)
                     file_size = os.path.getsize(filepath)
                     
                     # Extract timestamp from filename
@@ -1384,9 +1436,19 @@ class PerfectAIAudioProcessor:
             print(f"Error getting saved recordings: {e}")
             return []
     
-    def delete_recording(self, filename):
-        """Delete a saved recording file."""
+    def delete_recording(self, filename, user_id=None):
+        """Delete a saved recording file, optionally from user-specific directory."""
         try:
+            # If user_id is provided, check user-specific directory first
+            if user_id and self.user_id == user_id:
+                user_dir = os.path.join(self.recordings_dir, f"user_{user_id}")
+                user_filepath = os.path.join(user_dir, filename)
+                if os.path.exists(user_filepath):
+                    os.remove(user_filepath)
+                    print(f"🗑️ Deleted user recording: {filename}")
+                    return True
+            
+            # Fallback to main directory
             filepath = os.path.join(self.recordings_dir, filename)
             if os.path.exists(filepath):
                 os.remove(filepath)

@@ -929,6 +929,19 @@
                 console.log('🎯 Perfect AI analysis update:', data);
                 updateAnalysisDisplay(data.analysis);
                 updateConfidence(data.perfect_ai_confidence || 85);
+                
+                // Auto-refresh for real-time updates
+                if (data.should_refresh) {
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1000);
+                }
+            });
+            
+            socket.on('auth_required', function(data) {
+                console.log('🔒 Authentication required');
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/auth/login';
             });
 
             socket.on('perfect_final_analysis_complete', function (data) {
@@ -936,6 +949,12 @@
                 updateAnalysisDisplay(data.analysis);
                 updateConfidence(data.perfect_ai_quality_score || 95);
                 hideAnalyzingIndicator();
+                
+                // Auto-refresh to show complete analysis
+                showRefreshNotification();
+                setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
             });
 
             socket.on('perfect_status_update', function (data) {
@@ -952,6 +971,41 @@
                 console.log('🎯 Perfect AI proactive question received');
                 addProactiveQuestionToChat(data);
             });
+        }
+
+        function showRefreshNotification() {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--gradient-perfect-ai);
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                box-shadow: var(--shadow-xl);
+                z-index: 10000;
+                font-weight: 600;
+                animation: slideIn 0.3s ease-out;
+            `;
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span>🎯</span>
+                    <span>Analysis updated! Refreshing page...</span>
+                </div>
+            `;
+            
+            // Add animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            document.body.appendChild(notification);
         }
 
         function updateAnalysisDisplay(analysis) {
@@ -1217,6 +1271,13 @@
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
             });
+            
+            // Periodic sync to ensure data is up to date
+            setInterval(() => {
+                if (socket && socket.connected) {
+                    socket.emit('request_perfect_status');
+                }
+            }, 10000); // Sync every 10 seconds
         });
     </script>
 </body>

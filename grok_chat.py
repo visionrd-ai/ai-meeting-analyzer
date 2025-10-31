@@ -177,15 +177,26 @@ class MeetingChatGrok:
             max_tokens=2000,  # More tokens for comprehensive
         )
         assistant_text = response.choices[0].message.content or ""
+        
+        # Persist the new turn to history (store only user & assistant roles)
         self.chat_history.append({"role": "user", "content": user_message})
         self.chat_history.append({"role": "assistant", "content": assistant_text})
+        
+        return assistant_text
+        
     except Exception as e:
         print(f"Error communicating with Grok API: {e}")
+        error_message = f"I'm sorry, I encountered an error while processing your request: {str(e)}"
+        
+        # Still add to history for context
+        self.chat_history.append({"role": "user", "content": user_message})
+        self.chat_history.append({"role": "assistant", "content": error_message})
+        
+        return error_message
 
-    # Persist the new turn to history (store only user & assistant roles)
-
-
-    return assistant_text
+  def chat(self, user_message: str) -> str:
+    """Alias for send_chat method for compatibility."""
+    return self.send_chat(user_message)
 
   def reset_chat(self, transcript: str = "", analysis: str = "", system_prompt: str = SYSTEM_PROMPT):
     self.chat_history = []

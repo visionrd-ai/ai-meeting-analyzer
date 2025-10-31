@@ -10,6 +10,155 @@
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/microphone-permissions.js') }}"></script>
+    <script>
+        // Show helpful message about "not secure" warning
+        document.addEventListener('DOMContentLoaded', function() {
+            // Only show if using HTTPS (which means they've already accepted the certificate)
+            if (window.location.protocol === 'https:') {
+                // Check if this is the first visit by looking for a flag in sessionStorage
+                if (!sessionStorage.getItem('httpsWarningShown')) {
+                    setTimeout(() => {
+                        showSecurityExplanation();
+                        sessionStorage.setItem('httpsWarningShown', 'true');
+                    }, 2000); // Show after 2 seconds
+                }
+            }
+        });
+
+        function showSecurityExplanation() {
+            const notification = document.createElement('div');
+            notification.className = 'security-explanation';
+            notification.innerHTML = `
+                <div class="security-explanation-content">
+                    <div class="security-explanation-header">
+                        <span class="security-icon">🔒</span>
+                        <h3>Your Connection is Secure!</h3>
+                        <button class="close-btn" onclick="this.parentElement.parentElement.parentElement.remove()">×</button>
+                    </div>
+                    <div class="security-explanation-body">
+                        <p><strong>Don't worry about "Not Secure" warnings!</strong></p>
+                        <p>Your connection is actually encrypted and safe. The warning appears because we're using a self-signed certificate for local development.</p>
+                        <div class="security-features">
+                            <div class="feature">✅ HTTPS encryption active</div>
+                            <div class="feature">✅ Microphone access enabled</div>
+                            <div class="feature">✅ Data stays on your computer</div>
+                        </div>
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" class="got-it-btn">
+                            Got it! 👍
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+        }
+    </script>
+    <style>
+        .security-explanation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .security-explanation-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 500px;
+            margin: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .security-explanation-header {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .security-explanation-header h3 {
+            margin: 0;
+            flex: 1;
+            font-size: 1.2rem;
+        }
+
+        .security-icon {
+            font-size: 24px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .security-explanation-body {
+            padding: 20px;
+        }
+
+        .security-explanation-body p {
+            margin: 0 0 15px 0;
+            line-height: 1.5;
+        }
+
+        .security-features {
+            background: #f0fdf4;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .feature {
+            margin: 5px 0;
+            font-weight: 500;
+            color: #065f46;
+        }
+
+        .got-it-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .got-it-btn:hover {
+            background: #059669;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
     <style>
         :root {
             --primary: #DC2626;
@@ -198,6 +347,63 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
+        }
+
+        /* Security Status Styles */
+        .security-status {
+            margin: 15px 0;
+        }
+
+        .security-status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            flex-wrap: wrap;
+        }
+
+        .security-status-item.secure {
+            background: #f0fdf4;
+            border-color: #10b981;
+            color: #065f46;
+        }
+
+        .security-status-item.insecure {
+            background: #fffbeb;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .security-status-item .status-icon {
+            font-size: 20px;
+        }
+
+        .security-status-item .status-text {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .security-status-item .status-note {
+            width: 100%;
+            margin-top: 8px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .security-button {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .security-button:hover {
+            background: #d97706;
         }
 
         .perfect-ai-section {
@@ -615,30 +821,36 @@
             color: var(--perfect-ai-dark);
         }
 
-        input:focus, textarea:focus, button:focus {
+        input:focus,
+        textarea:focus,
+        button:focus {
             outline: 2px solid var(--perfect-ai);
             outline-offset: 2px;
             background: var(--bg) !important;
         }
 
-        input[type="text"]:focus, input[type="number"]:focus {
+        input[type="text"]:focus,
+        input[type="number"]:focus {
             background: var(--bg) !important;
             border-color: var(--perfect-ai) !important;
         }
 
-        .preset-btn:focus, .preset-btn:active {
+        .preset-btn:focus,
+        .preset-btn:active {
             background: var(--perfect-ai-light) !important;
             border-color: var(--perfect-ai) !important;
             color: var(--perfect-ai-dark) !important;
         }
 
-        .control-button:focus, .control-button:active {
+        .control-button:focus,
+        .control-button:active {
             background: var(--perfect-ai) !important;
             color: white !important;
         }
 
         /* Fix radio button labels */
-        .mode-option label:focus, .mode-option label:active {
+        .mode-option label:focus,
+        .mode-option label:active {
             background: var(--perfect-ai-light) !important;
             border-color: var(--perfect-ai) !important;
         }
@@ -649,8 +861,18 @@
     <div class="container">
         <!-- Perfect AI Header -->
         <div class="app-header">
-            <h1>🎯 AI Meeting Analyzer</h1>
-            <p class="subtitle">Simple and reliable voice recording</p>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                <div>
+                    <h1>🎯 AI Meeting Analyzer</h1>
+                    <p class="subtitle">Simple and reliable voice recording</p>
+                </div>
+                <div style="text-align: right; color: rgba(255,255,255,0.9);">
+                    <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">Welcome back,</div>
+                    <div style="font-weight: 600;">{{ current_user.full_name or current_user.username }}</div>
+                    <a href="{{ url_for('auth.logout') }}"
+                        style="color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.85rem;">Logout</a>
+                </div>
+            </div>
             <div class="perfect-ai-badge">
                 <span>🚀</span>
                 <span> AI v1.0 - Maximum Voice Isolation</span>
@@ -676,6 +898,9 @@
             </a>
             <a href="/analysis" class="nav-link">
                 🤖 AI Analysis
+            </a>
+            <a href="/history" class="nav-link">
+                📚 History
             </a>
         </div>
 
@@ -707,8 +932,9 @@
                 </div>
 
                 <!-- Word Count Configuration -->
-                <div class="word-count-config active" id="word-count-config"
+                <div class="word-count-config active" id="word-count-config" <!--
                     style="background: #FFF9E6; border: 2px solid var(--accent); border-radius: 12px; padding: 1.5rem; display: block;">
+                    -->
                     <h5 style="color: var(--accent); margin-bottom: 1rem;">📝 Word Count Threshold for AI Analysis</h5>
                     <div
                         style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
@@ -814,6 +1040,44 @@
         </div>
         {% endif %}
 
+        <!-- HTTPS Status Check -->
+        <div class="control-section">
+            <h3>🔒 Connection Security</h3>
+            <div id="https-status" class="security-status">
+                <script>
+                    // Check if we're using HTTPS
+                    if (window.location.protocol === 'https:') {
+                        document.write(`
+                            <div class="security-status-item secure">
+                                <span class="status-icon">🔒</span>
+                                <span class="status-text">Secure HTTPS connection active</span>
+                                <span class="status-note">Self-signed certificate warnings are normal for local development</span>
+                            </div>
+                        `);
+                    } else {
+                        document.write(`
+                            <div class="security-status-item insecure">
+                                <span class="status-icon">⚠️</span>
+                                <span class="status-text">HTTP connection detected</span>
+                                <button onclick="window.location.href='https://localhost:5000'" class="security-button">
+                                    Switch to HTTPS
+                                </button>
+                                <span class="status-note">HTTPS is required for microphone access</span>
+                            </div>
+                        `);
+                    }
+                </script>
+            </div>
+        </div>
+
+        <!-- Microphone Permission Status -->
+        <div class="control-section">
+            <h3>🎤 Microphone Access</h3>
+            <div id="microphone-status">
+                <!-- Microphone status will be populated by JavaScript -->
+            </div>
+        </div>
+
         <!-- Perfect AI Recording Controls -->
         <div class="control-section">
             <h3>🎯 AI Recording Controls</h3>
@@ -894,7 +1158,8 @@
             <div class="recordings-container">
                 <div class="recordings-header">
                     <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                        All recording sessions are automatically saved as WAV files. You can download or delete them here.
+                        All recording sessions are automatically saved as WAV files. You can download or delete them
+                        here.
                     </p>
                     <button class="control-button" onclick="refreshRecordings()" style="margin-bottom: 1rem;">
                         🔄 Refresh List
@@ -1217,7 +1482,7 @@
             socket.on('perfect_final_analysis_complete', function (data) {
                 console.log('🎯 Perfect AI final analysis complete');
                 showMessage('Perfect AI final analysis complete! Session ended.', 'success');
-                
+
                 // Check if we should refresh transcript page
                 if (data.refresh_transcript_page) {
                     showMessage('📄 Transcript page will be refreshed with final analysis!', 'info');
@@ -1227,6 +1492,12 @@
             socket.on('perfect_proactive_question', function (data) {
                 console.log('🎯 Perfect AI proactive question:', data.question);
                 showPerfectAIProactiveQuestion(data);
+            });
+
+            socket.on('auth_required', function(data) {
+                console.log('🔒 Authentication required');
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/auth/login';
             });
         }
 
@@ -1322,13 +1593,13 @@
         });
 
         // Recordings Management Functions
-        async function refreshRecordings() {
+        window.refreshRecordings = async function() {
             try {
                 const response = await fetch('/api/recordings');
                 const data = await response.json();
-                
+
                 const recordingsList = document.getElementById('recordingsList');
-                
+
                 if (data.success && data.recordings.length > 0) {
                     recordingsList.innerHTML = data.recordings.map(recording => `
                         <div class="recording-item">
@@ -1378,7 +1649,7 @@
                         method: 'DELETE'
                     });
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         showMessage(`Recording "${filename}" deleted successfully`, 'success');
                         refreshRecordings();
@@ -1392,7 +1663,7 @@
             }
         }
 
-        function setCustomWords() {
+        window.setCustomWords = function() {
             const customInput = document.getElementById('custom-words');
             const value = parseInt(customInput.value);
 
@@ -1420,9 +1691,16 @@
             }, 5000);
         }
 
-        async function startPerfectAIRecording() {
+        window.startPerfectAIRecording = async function() {
             const button = event.target;
             const originalText = button.innerHTML;
+            
+            // Check microphone permissions first
+            if (typeof micHandler !== 'undefined' && !micHandler.canStartRecording()) {
+                showMessage(micHandler.getErrorMessage(), 'error');
+                return;
+            }
+            
             button.innerHTML = '🎯 Starting Perfect AI...';
             button.disabled = true;
 
@@ -1442,13 +1720,28 @@
                     })
                 });
 
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response. Please refresh the page and try again.');
+                }
+
                 const result = await response.json();
+
+                if (response.status === 401) {
+                    // Authentication required
+                    showMessage('Please log in to continue', 'error');
+                    if (result.redirect) {
+                        setTimeout(() => window.location.href = result.redirect, 1500);
+                    }
+                    return;
+                }
 
                 if (result.success) {
                     showMessage(result.message, 'success');
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    showMessage(result.message, 'error');
+                    showMessage(result.error || result.message, 'error');
                     button.innerHTML = originalText;
                     button.disabled = false;
                 }
@@ -1460,7 +1753,7 @@
             }
         }
 
-        async function stopPerfectAIRecording() {
+        window.stopPerfectAIRecording = async function() {
             const button = event.target;
             const originalText = button.innerHTML;
             button.innerHTML = '⏸️ Stopping Perfect AI...';
@@ -1469,6 +1762,15 @@
             try {
                 const response = await fetch('/stop_recording', { method: 'POST' });
                 const result = await response.json();
+
+                if (response.status === 401) {
+                    // Authentication required
+                    showMessage('Please log in to continue', 'error');
+                    if (result.redirect) {
+                        setTimeout(() => window.location.href = result.redirect, 1500);
+                    }
+                    return;
+                }
 
                 if (result.success) {
                     showMessage('Perfect AI recording stopped. Generating final analysis...', 'info');
@@ -1486,7 +1788,7 @@
             }
         }
 
-        async function triggerPerfectAIAnalysis() {
+        window.triggerPerfectAIAnalysis = async function() {
             const button = document.getElementById('analyze-btn');
             if (!button || button.disabled) return;
 
@@ -1513,7 +1815,7 @@
             }
         }
 
-        async function clearPerfectAIData() {
+        window.clearPerfectAIData = async function() {
             if (!confirm('Are you sure you want to clear all Perfect AI data? This action cannot be undone.')) {
                 return;
             }

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 History - Perfect AI Meeting Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --perfect-ai: #8B5CF6;
+            --perfect-ai-light: #EDE9FE;
+            --perfect-ai-dark: #7C3AED;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-perfect-ai: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(220, 38, 38, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .app-header {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            text-align: center;
+            padding: 2.5rem 2rem;
+            border-radius: 20px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin-top: 0.75rem;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .user-info {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            text-align: right;
+            color: rgba(255,255,255,0.9);
+            z-index: 2;
+        }
+
+        .user-info .name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .user-info a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+
+        .navigation-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--perfect-ai);
+            color: var(--perfect-ai);
+        }
+
+        .nav-link.current {
+            background: var(--perfect-ai-light);
+            border-color: var(--perfect-ai);
+            color: var(--perfect-ai-dark);
+        }
+
+        .history-container {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--perfect-ai);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .sessions-section {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 0;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-light);
+            overflow: visible;
+            position: relative;
+        }
+
+        .section-header {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-header h3 {
+            font-size: 1.3rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+        }
+
+        .filter-select {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            position: relative;
+            z-index: 10;
+            min-width: 150px;
+        }
+
+        .filter-select option {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            padding: 0.5rem;
+        }
+
+        .filter-controls {
+            position: relative;
+            z-index: 20;
+        }
+
+        /* Custom Select Styles */
+        .custom-select {
+            position: relative;
+            min-width: 150px;
+        }
+
+        .select-selected {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.9rem;
+        }
+
+        .select-selected:after {
+            content: "▼";
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+            transition: transform 0.2s;
+        }
+
+        .select-selected.select-arrow-active:after {
+            transform: rotate(180deg);
+        }
+
+        .select-items {
+            position: absolute;
+            background: var(--card-bg);
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 99;
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+            margin-top: 2px;
+        }
+
+        .select-items div {
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        .select-items div:hover {
+            background: var(--perfect-ai-light);
+            color: var(--perfect-ai-dark);
+        }
+
+        .select-items div:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+
+        .select-items div:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+
+        .select-hide {
+            display: none;
+        }
+
+        .same-as-selected {
+            background: var(--perfect-ai-light) !important;
+            color: var(--perfect-ai-dark) !important;
+        }
+
+        .sessions-list {
+            padding: 2rem;
+        }
+
+        .session-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            transition: all 0.2s;
+            background: var(--bg-secondary);
+        }
+
+        .session-item:hover {
+            border-color: var(--perfect-ai);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .session-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .session-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .session-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .session-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        .stat-badge {
+            background: var(--perfect-ai-light);
+            color: var(--perfect-ai-dark);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .session-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: flex-end;
+        }
+
+        .action-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .action-btn.primary {
+            background: var(--perfect-ai);
+            color: white;
+        }
+
+        .action-btn.secondary {
+            background: var(--bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .action-btn.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            margin: 2rem;
+            box-shadow: var(--shadow-xl);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .transcript-content {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.6;
+        }
+
+        .analysis-content {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .analysis-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .analysis-section h4 {
+            color: var(--perfect-ai);
+            margin-bottom: 0.75rem;
+            font-weight: 700;
+        }
+
+        .analysis-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .analysis-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .analysis-list li:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .app-header { padding: 2rem 1rem; }
+            .app-header h1 { font-size: 2rem; }
+            .navigation-links { flex-direction: column; align-items: center; }
+            .session-item { grid-template-columns: 1fr; }
+            .session-actions { flex-direction: row; align-items: center; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .filter-controls { flex-direction: column; gap: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="app-header">
+            <div class="user-info">
+                <div class="name">{{ current_user.full_name or current_user.username }}</div>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </div>
+            <h1>📚 Session History</h1>
+            <p class="subtitle">View your past meetings, transcripts, and analysis</p>
+        </div>
+
+        <!-- Navigation Links -->
+        <div class="navigation-links">
+            <a href="{{ url_for('index') }}" class="nav-link">
+                🎯 AI Configuration
+            </a>
+            <a href="{{ url_for('transcript') }}" class="nav-link">
+                🎙️ Live Transcript
+            </a>
+            <a href="{{ url_for('analysis') }}" class="nav-link">
+                🤖 AI Analysis
+            </a>
+            <a href="{{ url_for('history') }}" class="nav-link current">
+                📚 History
+            </a>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total_sessions }}</div>
+                <div class="stat-label">Total Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total_words }}</div>
+                <div class="stat-label">Words Transcribed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total_duration }}</div>
+                <div class="stat-label">Total Duration</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total_recordings }}</div>
+                <div class="stat-label">Audio Files</div>
+            </div>
+        </div>
+
+        <!-- Sessions List -->
+        <div class="sessions-section">
+            <div class="section-header">
+                <h3>📋 Your Sessions</h3>
+                <div class="filter-controls">
+                    <button onclick="location.reload()" style="padding: 0.5rem 1rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-right: 1rem;">
+                        🔄 Refresh
+                    </button>
+                    <div class="custom-select" id="customSelect">
+                        <div class="select-selected">Recent (7 days)</div>
+                        <div class="select-items select-hide">
+                            <div data-value="all">All Sessions</div>
+                            <div data-value="with_analysis">With Analysis</div>
+                            <div data-value="with_transcript">With Transcript</div>
+                            <div data-value="recent" class="same-as-selected">Recent (7 days)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sessions-list">
+                {% if sessions %}
+                    {% for session in sessions %}
+                    <div class="session-item" data-session-id="{{ session.session_id }}">
+                        <div class="session-info">
+                            <div class="session-title">{{ session.title or 'Untitled Session' }}</div>
+                            <div class="session-meta">
+                                <span>📅 {{ session.started_at[:10] if session.started_at else 'Unknown date' }}</span>
+                                <span>⏱️ {{ session.duration_formatted }}</span>
+                                <span>🎤 {{ session.audio_source.title() }}</span>
+                                <span>🤖 {{ session.transcription_engine.replace('_', ' ').title() }}</span>
+                            </div>
+                            <div class="session-stats">
+                                <span class="stat-badge">{{ session.total_words }} words</span>
+                                <span class="stat-badge">{{ session.total_segments }} segments</span>
+                                {% if session.has_analysis %}
+                                <span class="stat-badge" style="background: var(--success); color: white;">✅ Analyzed</span>
+                                {% endif %}
+                                {% if session.recording_count > 0 %}
+                                <span class="stat-badge" style="background: var(--accent); color: white;">🎵 {{ session.recording_count }} files</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="session-actions">
+                            {% if session.has_transcript %}
+                            <button class="action-btn primary" onclick="viewTranscript('{{ session.session_id }}')">
+                                📄 View Transcript
+                            </button>
+                            {% endif %}
+                            {% if session.has_analysis %}
+                            <button class="action-btn success" onclick="viewAnalysis('{{ session.session_id }}')">
+                                🤖 View Analysis
+                            </button>
+                            {% endif %}
+                            {% if session.recording_count > 0 %}
+                            <a href="{{ url_for('download_session_recordings', session_id=session.session_id) }}" class="action-btn secondary">
+                                📥 Download Audio
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📚</div>
+                        <h3>No sessions yet</h3>
+                        <p>Start your first recording session to see your history here.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Transcript Modal -->
+    <div class="modal" id="transcriptModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📄 Session Transcript</h3>
+                <button class="modal-close" onclick="closeModal('transcriptModal')">&times;</button>
+            </div>
+            <div id="transcriptContent" class="transcript-content">
+                Loading transcript...
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis Modal -->
+    <div class="modal" id="analysisModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🤖 AI Analysis</h3>
+                <button class="modal-close" onclick="closeModal('analysisModal')">&times;</button>
+            </div>
+            <div id="analysisContent" class="analysis-content">
+                Loading analysis...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function viewTranscript(sessionId) {
+            const modal = document.getElementById('transcriptModal');
+            const content = document.getElementById('transcriptContent');
+            
+            content.innerHTML = 'Loading transcript...';
+            modal.classList.add('active');
+            
+            fetch(`/api/session/${sessionId}/transcript`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        content.innerHTML = data.transcript || 'No transcript available';
+                    } else {
+                        content.innerHTML = 'Error loading transcript: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    content.innerHTML = 'Error loading transcript: ' + error.message;
+                });
+        }
+
+        function viewAnalysis(sessionId) {
+            const modal = document.getElementById('analysisModal');
+            const content = document.getElementById('analysisContent');
+            
+            content.innerHTML = 'Loading analysis...';
+            modal.classList.add('active');
+            
+            fetch(`/api/session/${sessionId}/analysis`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.analysis) {
+                        let html = '';
+                        
+                        if (data.analysis.key_points) {
+                            html += '<div class="analysis-section"><h4>🎯 Key Points</h4><ul class="analysis-list">';
+                            data.analysis.key_points.forEach(point => {
+                                html += `<li>${point}</li>`;
+                            });
+                            html += '</ul></div>';
+                        }
+                        
+                        if (data.analysis.potential_issues) {
+                            html += '<div class="analysis-section"><h4>⚠️ Potential Issues</h4><ul class="analysis-list">';
+                            data.analysis.potential_issues.forEach(issue => {
+                                html += `<li>${issue}</li>`;
+                            });
+                            html += '</ul></div>';
+                        }
+                        
+                        if (data.analysis.recommendations) {
+                            html += '<div class="analysis-section"><h4>💡 Recommendations</h4><ul class="analysis-list">';
+                            data.analysis.recommendations.forEach(rec => {
+                                html += `<li>${rec}</li>`;
+                            });
+                            html += '</ul></div>';
+                        }
+                        
+                        content.innerHTML = html || 'No analysis content available';
+                    } else {
+                        content.innerHTML = 'Error loading analysis: ' + (data.error || 'No analysis available');
+                    }
+                })
+                .catch(error => {
+                    content.innerHTML = 'Error loading analysis: ' + error.message;
+                });
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Custom dropdown functionality
+        function initCustomSelect() {
+            const customSelect = document.getElementById('customSelect');
+            const selectSelected = customSelect.querySelector('.select-selected');
+            const selectItems = customSelect.querySelector('.select-items');
+            const selectOptions = selectItems.querySelectorAll('div');
+
+            selectSelected.addEventListener('click', function(e) {
+                e.stopPropagation();
+                closeAllSelect(this);
+                selectItems.classList.toggle('select-hide');
+                this.classList.toggle('select-arrow-active');
+            });
+
+            selectOptions.forEach(option => {
+                option.addEventListener('click', function(e) {
+                    const value = this.getAttribute('data-value');
+                    const text = this.textContent;
+                    
+                    // Update selected text
+                    selectSelected.textContent = text;
+                    
+                    // Update selected class
+                    selectOptions.forEach(opt => opt.classList.remove('same-as-selected'));
+                    this.classList.add('same-as-selected');
+                    
+                    // Close dropdown
+                    selectItems.classList.add('select-hide');
+                    selectSelected.classList.remove('select-arrow-active');
+                    
+                    // Apply filter
+                    applyFilter(value);
+                });
+            });
+        }
+
+        function closeAllSelect(elmnt) {
+            const selectItems = document.querySelectorAll('.select-items');
+            const selectSelected = document.querySelectorAll('.select-selected');
+            
+            selectItems.forEach((item, index) => {
+                if (elmnt !== selectSelected[index]) {
+                    item.classList.add('select-hide');
+                    selectSelected[index].classList.remove('select-arrow-active');
+                }
+            });
+        }
+
+        function applyFilter(filter) {
+            const sessions = document.querySelectorAll('.session-item');
+            
+            sessions.forEach(session => {
+                let show = true;
+                
+                if (filter === 'with_analysis') {
+                    show = session.textContent.includes('✅ Analyzed');
+                } else if (filter === 'with_transcript') {
+                    show = session.querySelector('.action-btn[onclick*="viewTranscript"]') !== null;
+                } else if (filter === 'recent') {
+                    // Simple recent filter - you could make this more sophisticated
+                    show = true; // For now, show all
+                }
+                
+                session.style.display = show ? 'grid' : 'none';
+            });
+        }
+
+        // Initialize custom select on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initCustomSelect();
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', closeAllSelect);
+
+        // Close modals when clicking outside
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>
