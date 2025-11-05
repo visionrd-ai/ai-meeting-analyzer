@@ -646,6 +646,9 @@
                                 {% if session.has_analysis %}
                                 <span class="stat-badge" style="background: var(--success); color: white;">✅ Analyzed</span>
                                 {% endif %}
+                                {% if session.has_speaker_diarization %}
+                                <span class="stat-badge" style="background: var(--perfect-ai); color: white;">🎙️ {{ session.speaker_count }} speakers</span>
+                                {% endif %}
                                 {% if session.recording_count > 0 %}
                                 <span class="stat-badge" style="background: var(--accent); color: white;">🎵 {{ session.recording_count }} files</span>
                                 {% endif %}
@@ -660,6 +663,11 @@
                             {% if session.has_analysis %}
                             <button class="action-btn success" onclick="viewAnalysis('{{ session.session_id }}')">
                                 🤖 View Analysis
+                            </button>
+                            {% endif %}
+                            {% if session.has_speaker_diarization %}
+                            <button class="action-btn" style="background: var(--perfect-ai); color: white;" onclick="viewSpeakerDiarization('{{ session.session_id }}')">
+                                🎙️ View Speakers
                             </button>
                             {% endif %}
                             {% if session.recording_count > 0 %}
@@ -703,6 +711,19 @@
             </div>
             <div id="analysisContent" class="analysis-content">
                 Loading analysis...
+            </div>
+        </div>
+    </div>
+
+    <!-- Speaker Diarization Modal -->
+    <div class="modal" id="speakerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🎙️ Speaker Analysis</h3>
+                <button class="modal-close" onclick="closeModal('speakerModal')">&times;</button>
+            </div>
+            <div id="speakerContent" class="speaker-content">
+                Loading speaker analysis...
             </div>
         </div>
     </div>
@@ -773,6 +794,102 @@
                 })
                 .catch(error => {
                     content.innerHTML = 'Error loading analysis: ' + error.message;
+                });
+        }
+
+        function viewSpeakerDiarization(sessionId) {
+            const modal = document.getElementById('speakerModal');
+            const content = document.getElementById('speakerContent');
+            
+            content.innerHTML = 'Loading speaker analysis...';
+            modal.classList.add('active');
+            
+            fetch(`/api/session/${sessionId}/speaker-diarization`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.speaker_diarization) {
+                        const result = data.speaker_diarization;
+                        const summary = result.summary || {};
+                        const segments = result.segments || [];
+                        const speakerStats = result.speaker_statistics || {};
+                        
+                        let html = `
+                            <div class="speaker-summary">
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <div class="summary-value">${summary.total_speakers || 0}</div>
+                                        <div class="summary-label">Total Speakers</div>
+                                    </div>
+                                    <div class="summary-item">
+                                        <div class="summary-value">${Math.round(summary.total_duration || 0)}s</div>
+                                        <div class="summary-label">Total Duration</div>
+                                    </div>
+                                    <div class="summary-item">
+                                        <div class="summary-value">${summary.total_words || 0}</div>
+                                        <div class="summary-label">Total Words</div>
+                                    </div>
+                                    <div class="summary-item">
+                                        <div class="summary-value">${Math.round((summary.confidence_score || 0) * 100)}%</div>
+                                        <div class="summary-label">Confidence</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // Add speaker statistics
+                        if (Object.keys(speakerStats).length > 0) {
+                            html += '<div class="speaker-stats"><h4>👥 Speaker Statistics</h4>';
+                            
+                            Object.keys(speakerStats).forEach(speakerId => {
+                                const stats = speakerStats[speakerId];
+                                const speakerNum = parseInt(speakerId) + 1;
+                                const duration = Math.round(stats.total_duration / 1000);
+                                const confidence = Math.round(stats.avg_confidence * 100);
+                                
+                                html += `
+                                    <div class="speaker-stat-item">
+                                        <div class="speaker-label">Speaker ${speakerNum}</div>
+                                        <div class="speaker-details">
+                                            ${duration}s speaking time • ${stats.total_words} words • ${confidence}% confidence
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            
+                            html += '</div>';
+                        }
+                        
+                        // Add transcript preview
+                        if (segments.length > 0) {
+                            html += '<div class="speaker-transcript"><h4>📝 Transcript Preview</h4>';
+                            
+                            const previewSegments = segments.slice(0, 5); // Show first 5 segments
+                            previewSegments.forEach(segment => {
+                                html += `
+                                    <div class="transcript-segment">
+                                        <div class="segment-header">
+                                            <span class="speaker-tag">${segment.speaker}</span>
+                                            <span class="segment-time">${segment.start_formatted}</span>
+                                        </div>
+                                        <div class="segment-text">${segment.text}</div>
+                                    </div>
+                                `;
+                            });
+                            
+                            if (segments.length > 5) {
+                                html += `<div class="more-segments">... and ${segments.length - 5} more segments</div>`;
+                            }
+                            
+                            html += '</div>';
+                        }
+                        
+                        content.innerHTML = html;
+                    } else {
+                        content.innerHTML = 'Error loading speaker analysis: ' + (data.error || 'No speaker diarization available');
+                    }
+                })
+                .catch(error => {
+                    content.innerHTML = 'Error loading speaker analysis: ' + error.message;
                 });
         }
 

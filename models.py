@@ -91,6 +91,12 @@ class RecordingSession(db.Model):
     total_words = db.Column(db.Integer, default=0)
     total_segments = db.Column(db.Integer, default=0)
     
+    # Speaker diarization data
+    speaker_diarization = db.Column(db.Text, nullable=True)  # JSON string of speaker diarization results
+    speaker_count = db.Column(db.Integer, default=0)  # Number of detected speakers
+    diarization_confidence = db.Column(db.Float, default=0.0)  # Diarization confidence score
+    diarization_generated_at = db.Column(db.DateTime, nullable=True)
+    
     # Status
     is_active = db.Column(db.Boolean, default=True)
     
@@ -117,9 +123,13 @@ class RecordingSession(db.Model):
             'analysis_generated_at': self.analysis_generated_at.isoformat() if self.analysis_generated_at else None,
             'analysis_word_count': self.analysis_word_count,
             'analysis_confidence': self.analysis_confidence,
+            'speaker_count': self.speaker_count,
+            'diarization_confidence': self.diarization_confidence,
+            'diarization_generated_at': self.diarization_generated_at.isoformat() if self.diarization_generated_at else None,
             'is_active': self.is_active,
             'has_transcript': bool(self.transcript_text),
             'has_analysis': bool(self.final_analysis),
+            'has_speaker_diarization': bool(self.speaker_diarization),
             'recording_count': len(self.recordings) if self.recordings else 0
         }
         
@@ -129,7 +139,8 @@ class RecordingSession(db.Model):
                 'transcript_text': self.transcript_text,
                 'transcript_segments': json.loads(self.transcript_segments) if self.transcript_segments else [],
                 'current_analysis': json.loads(self.current_analysis) if self.current_analysis else None,
-                'final_analysis': json.loads(self.final_analysis) if self.final_analysis else None
+                'final_analysis': json.loads(self.final_analysis) if self.final_analysis else None,
+                'speaker_diarization': json.loads(self.speaker_diarization) if self.speaker_diarization else None
             })
         
         return data

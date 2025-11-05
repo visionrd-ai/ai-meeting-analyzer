@@ -236,6 +236,159 @@
             padding: 2rem;
         }
 
+        /* Speaker Diarization Styles */
+        .speaker-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .speaker-summary-item {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid var(--border);
+        }
+
+        .speaker-summary-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--perfect-ai);
+            margin-bottom: 0.25rem;
+        }
+
+        .speaker-summary-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .speaker-timeline {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .speaker-timeline h4 {
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .timeline-segment {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid var(--perfect-ai);
+        }
+
+        .timeline-segment.speaker-1 {
+            border-left-color: #dc2626;
+        }
+
+        .timeline-segment.speaker-2 {
+            border-left-color: #2563eb;
+        }
+
+        .timeline-segment.speaker-3 {
+            border-left-color: #059669;
+        }
+
+        .timeline-segment.speaker-4 {
+            border-left-color: #d97706;
+        }
+
+        .timeline-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            min-width: 60px;
+        }
+
+        .timeline-speaker {
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 80px;
+        }
+
+        .timeline-text {
+            flex: 1;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        .speaker-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .speaker-stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid var(--border);
+        }
+
+        .speaker-stat-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .speaker-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .speaker-badge.speaker-1 {
+            background: #dc2626;
+        }
+
+        .speaker-badge.speaker-2 {
+            background: #2563eb;
+        }
+
+        .speaker-badge.speaker-3 {
+            background: #059669;
+        }
+
+        .speaker-badge.speaker-4 {
+            background: #d97706;
+        }
+
+        .speaker-stat-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .speaker-metric {
+            text-align: center;
+        }
+
+        .speaker-metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--perfect-ai);
+        }
+
+        .speaker-metric-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
         .analysis-section {
             margin-bottom: 2rem;
         }
@@ -780,6 +933,21 @@
                 </div>
                 {% endif %}
 
+                <!-- Speaker Diarization -->
+                <div class="analysis-card" id="speaker-diarization-section" style="display: none;">
+                    <div class="analysis-header">
+                        <h3>🎙️ Speaker Analysis</h3>
+                        <div class="export-controls">
+                            <button class="export-btn" onclick="exportSpeakerDiarization()">📄 Export</button>
+                        </div>
+                    </div>
+                    <div class="analysis-content">
+                        <div id="speaker-diarization-content">
+                            <!-- Speaker diarization content will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
                 {% else %}
                 <!-- Empty State -->
                 <div class="analysis-card">
@@ -950,11 +1118,23 @@
                 updateConfidence(data.perfect_ai_quality_score || 95);
                 hideAnalyzingIndicator();
                 
+                // Handle speaker diarization if available
+                if (data.speaker_diarization && data.speaker_diarization.success) {
+                    displaySpeakerDiarization(data.speaker_diarization);
+                }
+                
                 // Auto-refresh to show complete analysis
                 showRefreshNotification();
                 setTimeout(function() {
                     window.location.reload();
                 }, 2000);
+            });
+
+            socket.on('speaker_diarization_complete', function(data) {
+                console.log('🎙️ Speaker diarization completed in analysis page:', data);
+                if (data.result && data.result.success) {
+                    displaySpeakerDiarization(data.result);
+                }
             });
 
             socket.on('perfect_status_update', function (data) {
@@ -1184,6 +1364,256 @@
             chatHistory.push({ message, sender, timestamp: new Date() });
         }
 
+        // Speaker Diarization Functions
+        function displaySpeakerDiarization(result) {
+            if (!result || !result.success) return;
+            
+            const section = document.getElementById('speaker-diarization-section');
+            const content = document.getElementById('speaker-diarization-content');
+            
+            if (!section || !content) return;
+            
+            // Show the section
+            section.style.display = 'block';
+            
+            const summary = result.summary || {};
+            const segments = result.segments || [];
+            const speakerStats = result.speaker_statistics || {};
+            
+            // Create summary
+            let summaryHTML = `
+                <div class="speaker-summary">
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${summary.total_speakers || 0}</div>
+                        <div class="speaker-summary-label">Total Speakers</div>
+                    </div>
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${Math.round(summary.total_duration || 0)}s</div>
+                        <div class="speaker-summary-label">Total Duration</div>
+                    </div>
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${summary.total_words || 0}</div>
+                        <div class="speaker-summary-label">Total Words</div>
+                    </div>
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${Math.round((summary.confidence_score || 0) * 100)}%</div>
+                        <div class="speaker-summary-label">Confidence</div>
+                    </div>
+                </div>
+            `;
+            
+            // Create speaker statistics
+            if (Object.keys(speakerStats).length > 0) {
+                summaryHTML += '<div class="speaker-stats-grid">';
+                
+                Object.keys(speakerStats).forEach(speakerId => {
+                    const stats = speakerStats[speakerId];
+                    const speakerNum = parseInt(speakerId) + 1;
+                    const duration = Math.round(stats.total_duration / 1000);
+                    const confidence = Math.round(stats.avg_confidence * 100);
+                    
+                    summaryHTML += `
+                        <div class="speaker-stat-card">
+                            <div class="speaker-stat-header">
+                                <span class="speaker-badge speaker-${speakerNum}">Speaker ${speakerNum}</span>
+                            </div>
+                            <div class="speaker-stat-metrics">
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${duration}s</div>
+                                    <div class="speaker-metric-label">Speaking Time</div>
+                                </div>
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${stats.total_words}</div>
+                                    <div class="speaker-metric-label">Words Spoken</div>
+                                </div>
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${stats.segments_count}</div>
+                                    <div class="speaker-metric-label">Segments</div>
+                                </div>
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${confidence}%</div>
+                                    <div class="speaker-metric-label">Confidence</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                summaryHTML += '</div>';
+            }
+            
+            // Create timeline
+            if (segments.length > 0) {
+                summaryHTML += `
+                    <div class="speaker-timeline">
+                        <h4>🕐 Speaker Timeline</h4>
+                `;
+                
+                // Show first 10 segments to avoid overwhelming the UI
+                const displaySegments = segments.slice(0, 10);
+                
+                displaySegments.forEach(segment => {
+                    const speakerNum = segment.speaker.replace('Speaker ', '');
+                    const speakerClass = `speaker-${speakerNum}`;
+                    
+                    summaryHTML += `
+                        <div class="timeline-segment ${speakerClass}">
+                            <div class="timeline-time">${segment.start_formatted}</div>
+                            <div class="timeline-speaker">${segment.speaker}</div>
+                            <div class="timeline-text">${segment.text.substring(0, 150)}${segment.text.length > 150 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                
+                if (segments.length > 10) {
+                    summaryHTML += `
+                        <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                            ... and ${segments.length - 10} more segments
+                        </div>
+                    `;
+                }
+                
+                summaryHTML += '</div>';
+            }
+            
+            content.innerHTML = summaryHTML;
+        }
+
+        function fetchSpeakerDiarization() {
+            // Fetch speaker diarization data for current session
+            const sessionId = '{{ session_id }}';
+            if (!sessionId) return;
+            
+            fetch(`/api/session/${sessionId}/speaker-diarization`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.speaker_diarization) {
+                        console.log('🎙️ Speaker diarization data loaded for analysis:', data.speaker_diarization);
+                        
+                        // Show speaker diarization section
+                        const section = document.getElementById('speaker-diarization-section');
+                        if (section) {
+                            section.style.display = 'block';
+                            
+                            // Display speaker diarization content
+                            displaySpeakerDiarizationAnalysis(data.speaker_diarization);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching speaker diarization for analysis:', error);
+                });
+        }
+
+        function displaySpeakerDiarizationAnalysis(diarizationData) {
+            const contentElement = document.getElementById('speaker-diarization-content');
+            if (!contentElement || !diarizationData) return;
+            
+            const segments = diarizationData.segments || [];
+            const speakerStats = diarizationData.speaker_statistics || {};
+            const summary = diarizationData.summary || {};
+            
+            if (segments.length === 0) {
+                contentElement.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No speaker diarization data available</p>';
+                return;
+            }
+            
+            // Create speaker summary
+            let summaryHTML = `
+                <div class="speaker-summary">
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${summary.total_speakers || 0}</div>
+                        <div class="speaker-summary-label">Speakers</div>
+                    </div>
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${Math.round(summary.total_duration || 0)}s</div>
+                        <div class="speaker-summary-label">Duration</div>
+                    </div>
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${summary.total_segments || 0}</div>
+                        <div class="speaker-summary-label">Segments</div>
+                    </div>
+                    <div class="speaker-summary-item">
+                        <div class="speaker-summary-value">${Math.round((summary.confidence_score || 0) * 100)}%</div>
+                        <div class="speaker-summary-label">Confidence</div>
+                    </div>
+                </div>
+            `;
+            
+            // Create speaker statistics
+            if (Object.keys(speakerStats).length > 0) {
+                summaryHTML += '<div class="speaker-stats-grid">';
+                
+                Object.keys(speakerStats).forEach(speakerId => {
+                    const stats = speakerStats[speakerId];
+                    const speakerNum = speakerId.replace('Speaker ', '').replace('speaker_', '');
+                    const duration = Math.round((stats.total_duration || 0) / 1000);
+                    const confidence = Math.round((stats.avg_confidence || 0.85) * 100);
+                    
+                    summaryHTML += `
+                        <div class="speaker-stat-card">
+                            <div class="speaker-stat-header">
+                                <span class="speaker-badge speaker-${speakerNum}">Speaker ${speakerNum}</span>
+                            </div>
+                            <div class="speaker-stat-metrics">
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${duration}s</div>
+                                    <div class="speaker-metric-label">Speaking Time</div>
+                                </div>
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${stats.total_words}</div>
+                                    <div class="speaker-metric-label">Words Spoken</div>
+                                </div>
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${stats.segments_count}</div>
+                                    <div class="speaker-metric-label">Segments</div>
+                                </div>
+                                <div class="speaker-metric">
+                                    <div class="speaker-metric-value">${confidence}%</div>
+                                    <div class="speaker-metric-label">Confidence</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                summaryHTML += '</div>';
+            }
+            
+            // Create timeline
+            if (segments.length > 0) {
+                summaryHTML += `
+                    <div class="speaker-timeline">
+                        <h4>🕐 Speaker Timeline</h4>
+                `;
+                
+                segments.slice(0, 10).forEach(segment => { // Show first 10 segments
+                    const speakerNum = (segment.speaker || 'Speaker 1').replace('Speaker ', '');
+                    const timestamp = segment.start_formatted || segment.timestamp || '00:00:00';
+                    summaryHTML += `
+                        <div class="timeline-segment speaker-${speakerNum}">
+                            <div class="timeline-time">${timestamp}</div>
+                            <div class="timeline-speaker">${segment.speaker || 'Speaker 1'}</div>
+                            <div class="timeline-text">${(segment.text || '').substring(0, 100)}${(segment.text || '').length > 100 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                
+                if (segments.length > 10) {
+                    summaryHTML += `<p style="text-align: center; color: var(--text-secondary); margin-top: 1rem;">... and ${segments.length - 10} more segments</p>`;
+                }
+                
+                summaryHTML += '</div>';
+            }
+            
+            contentElement.innerHTML = summaryHTML;
+        }
+
+        function exportSpeakerDiarization() {
+            // This would export the speaker diarization data
+            alert('Speaker diarization export functionality coming soon!');
+        }
+
         function exportSection(sectionType) {
             if (!currentAnalysis) {
                 alert('No analysis data to export');
@@ -1256,6 +1686,9 @@
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function () {
             initializePerfectAISocket();
+            
+            // Fetch speaker diarization data if available
+            fetchSpeakerDiarization();
 
             // Chat input handling
             const chatInput = document.getElementById('chat-input');
