@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎙️ Speaker Diarization - Perfect AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {
+            --primary: #DC2626;
+            --primary-dark: #B91C1C;
+            --primary-light: #FEE2E2;
+            --secondary: #1F2937;
+            --secondary-light: #374151;
+            --accent: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #DC2626;
+            --perfect-ai: #8B5CF6;
+            --perfect-ai-light: #EDE9FE;
+            --perfect-ai-dark: #7C3AED;
+            --bg: #FFFFFF;
+            --bg-secondary: #F9FAFB;
+            --bg-tertiary: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --gradient-primary: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            --gradient-perfect-ai: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+            --gradient-accent: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .app-header {
+            background: var(--gradient-perfect-ai);
+            color: white;
+            text-align: center;
+            padding: 2.5rem 2rem;
+            border-radius: 20px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+
+        .navigation-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .nav-link.current {
+            background: white;
+            color: var(--perfect-ai);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .section-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-light);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-light);
+        }
+
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: var(--perfect-ai);
+            background: var(--perfect-ai-light);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--perfect-ai);
+            background: var(--perfect-ai-light);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--perfect-ai);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: var(--gradient-perfect-ai);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .audio-files-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .audio-file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .audio-file-item:hover {
+            background: var(--bg-secondary);
+            border-color: var(--perfect-ai);
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .file-details {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .results-section {
+            grid-column: 1 / -1;
+            margin-top: 2rem;
+        }
+
+        .result-item {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .result-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .result-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .transcript-preview {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .speaker-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .speaker-stat {
+            background: var(--perfect-ai-light);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .speaker-stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .speaker-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--perfect-ai-dark);
+        }
+
+        .processing-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .processing-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--perfect-ai);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #f0fdf4;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+
+        .message.error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #dc2626;
+        }
+
+        .message.warning {
+            background: #fffbeb;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .navigation-links {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .app-header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="app-header">
+            <h1>🎙️ Speaker Diarization</h1>
+            <p class="subtitle">Identify and separate different speakers in your audio recordings</p>
+            
+            <div class="navigation-links">
+                <a href="/" class="nav-link">🎯 AI Configuration</a>
+                <a href="/transcript" class="nav-link">🎙️ Live Transcript</a>
+                <a href="/analysis" class="nav-link">📊 AI Analysis</a>
+                <a href="/speaker-diarization" class="nav-link current">🎙️ Speaker Diarization</a>
+                <a href="/history" class="nav-link">📚 History</a>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages"></div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Upload Section -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h2>📤 Upload Audio</h2>
+                </div>
+
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">🎵</div>
+                    <h3>Drop audio file here or click to browse</h3>
+                    <p>Supports: WAV, MP3, M4A, FLAC, OGG</p>
+                    <input type="file" id="audioFileInput" accept=".wav,.mp3,.m4a,.flac,.ogg" style="display: none;">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Or enter audio URL:</label>
+                    <input type="url" id="audioUrlInput" class="form-input" placeholder="https://example.com/audio.wav">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Expected number of speakers (optional):</label>
+                    <input type="number" id="speakersExpected" class="form-input" min="2" max="10" placeholder="e.g., 3">
+                </div>
+
+                <button id="processBtn" class="btn btn-primary" style="width: 100%;">
+                    🎯 Start Speaker Diarization
+                </button>
+            </div>
+
+            <!-- Available Files Section -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h2>📁 Available Audio Files</h2>
+                </div>
+
+                <div class="audio-files-list" id="audioFilesList">
+                    {% if audio_files %}
+                        {% for file in audio_files %}
+                        <div class="audio-file-item" data-path="{{ file.path }}">
+                            <div class="file-info">
+                                <div class="file-name">{{ file.filename }}</div>
+                                <div class="file-details">{{ file.size_mb }} MB • {{ file.modified }}</div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="selectAudioFile('{{ file.path }}', '{{ file.filename }}')">
+                                Select
+                            </button>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            📂 No audio files found
+                            <br>
+                            <small>Record some meetings first or upload an audio file</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section">
+            <div class="section-card">
+                <div class="section-header">
+                    <h2>📊 Diarization Results</h2>
+                </div>
+
+                <div id="resultsContainer">
+                    {% if diarization_results %}
+                        {% for result in diarization_results %}
+                        <div class="result-item">
+                            <div class="result-header">
+                                <div class="result-title">{{ result.filename }}</div>
+                                <div class="result-actions">
+                                    <button class="btn btn-secondary" onclick="viewResult('{{ result.filename }}')">
+                                        👁️ View
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="exportResult('{{ result.filename }}', 'txt')">
+                                        📄 Export TXT
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="exportResult('{{ result.filename }}', 'json')">
+                                        📋 Export JSON
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="file-details">{{ result.size_kb }} KB • {{ result.modified }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            📊 No diarization results yet
+                            <br>
+                            <small>Process an audio file to see speaker diarization results</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Overlay -->
+    <div class="processing-overlay" id="processingOverlay">
+        <div class="processing-content">
+            <div class="spinner"></div>
+            <h3>Processing Audio...</h3>
+            <p id="processingStatus">Uploading and analyzing audio for speaker diarization</p>
+        </div>
+    </div>
+
+    <!-- Result Modal -->
+    <div class="processing-overlay" id="resultModal" style="display: none;">
+        <div class="processing-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 id="resultTitle">Diarization Result</h3>
+                <button class="btn btn-secondary" onclick="closeResultModal()">✕ Close</button>
+            </div>
+            
+            <div id="resultContent">
+                <!-- Result content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedAudioPath = null;
+        let selectedAudioName = null;
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('audioFileInput');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        async function handleFileUpload(file) {
+            const formData = new FormData();
+            formData.append('audio_file', file);
+
+            try {
+                showMessage('Uploading file...', 'info');
+                
+                const response = await fetch('/api/speaker-diarization/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    selectedAudioPath = result.filepath;
+                    selectedAudioName = result.filename;
+                    showMessage(`File uploaded: ${result.filename}`, 'success');
+                    
+                    // Update upload area
+                    uploadArea.innerHTML = `
+                        <div class="upload-icon">✅</div>
+                        <h3>File Ready: ${result.filename}</h3>
+                        <p>Click "Start Speaker Diarization" to process</p>
+                    `;
+                } else {
+                    showMessage(result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Upload failed: ' + error.message, 'error');
+            }
+        }
+
+        function selectAudioFile(path, name) {
+            selectedAudioPath = path;
+            selectedAudioName = name;
+            showMessage(`Selected: ${name}`, 'success');
+            
+            // Update upload area
+            uploadArea.innerHTML = `
+                <div class="upload-icon">✅</div>
+                <h3>File Selected: ${name}</h3>
+                <p>Click "Start Speaker Diarization" to process</p>
+            `;
+        }
+
+        async function processAudio() {
+            const audioUrl = document.getElementById('audioUrlInput').value.trim();
+            const speakersExpected = document.getElementById('speakersExpected').value;
+
+            // Determine audio source
+            let audioSource, audioPath, audioUrlValue;
+            
+            if (audioUrl) {
+                audioSource = 'url';
+                audioUrlValue = audioUrl;
+            } else if (selectedAudioPath) {
+                audioSource = 'file';
+                audioPath = selectedAudioPath;
+            } else {
+                showMessage('Please select an audio file or enter an audio URL', 'error');
+                return;
+            }
+
+            try {
+                showProcessing('Starting speaker diarization...');
+
+                const response = await fetch('/api/speaker-diarization/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        audio_source: audioSource,
+                        audio_path: audioPath,
+                        audio_url: audioUrlValue,
+                        speakers_expected: speakersExpected
+                    })
+                });
+
+                const result = await response.json();
+
+                hideProcessing();
+
+                if (result.success) {
+                    showMessage('Speaker diarization completed successfully!', 'success');
+                    displayResult(result.result);
+                    
+                    // Refresh page to show new result
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showMessage(result.error, 'error');
+                }
+            } catch (error) {
+                hideProcessing();
+                showMessage('Processing failed: ' + error.message, 'error');
+            }
+        }
+
+        async function viewResult(filename) {
+            try {
+                const response = await fetch(`/api/speaker-diarization/results/${filename}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayResultModal(data.result, filename);
+                } else {
+                    showMessage(data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to load result: ' + error.message, 'error');
+            }
+        }
+
+        function displayResultModal(result, filename) {
+            const modal = document.getElementById('resultModal');
+            const title = document.getElementById('resultTitle');
+            const content = document.getElementById('resultContent');
+
+            title.textContent = `Speaker Diarization: ${filename}`;
+
+            const summary = result.summary || {};
+            const segments = result.segments || [];
+            const speakerStats = result.speaker_statistics || {};
+
+            content.innerHTML = `
+                <div class="speaker-stats">
+                    <div class="speaker-stat">
+                        <div class="speaker-stat-label">Total Speakers</div>
+                        <div class="speaker-stat-value">${summary.total_speakers || 0}</div>
+                    </div>
+                    <div class="speaker-stat">
+                        <div class="speaker-stat-label">Total Duration</div>
+                        <div class="speaker-stat-value">${Math.round(summary.total_duration || 0)}s</div>
+                    </div>
+                    <div class="speaker-stat">
+                        <div class="speaker-stat-label">Total Words</div>
+                        <div class="speaker-stat-value">${summary.total_words || 0}</div>
+                    </div>
+                    <div class="speaker-stat">
+                        <div class="speaker-stat-label">Confidence</div>
+                        <div class="speaker-stat-value">${Math.round((summary.confidence_score || 0) * 100)}%</div>
+                    </div>
+                </div>
+                
+                <h4 style="margin: 1.5rem 0 1rem 0;">Transcript:</h4>
+                <div class="transcript-preview">${result.formatted_text || 'No transcript available'}</div>
+            `;
+
+            modal.style.display = 'flex';
+        }
+
+        function closeResultModal() {
+            document.getElementById('resultModal').style.display = 'none';
+        }
+
+        function exportResult(filename, format) {
+            const url = `/api/speaker-diarization/export/${filename}?format=${format}`;
+            window.open(url, '_blank');
+        }
+
+        function displayResult(result) {
+            // This could be expanded to show results inline
+            console.log('Diarization result:', result);
+        }
+
+        function showProcessing(status) {
+            document.getElementById('processingStatus').textContent = status;
+            document.getElementById('processingOverlay').style.display = 'flex';
+        }
+
+        function hideProcessing() {
+            document.getElementById('processingOverlay').style.display = 'none';
+        }
+
+        function showMessage(message, type) {
+            const messagesContainer = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            
+            messagesContainer.appendChild(messageDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (messageDiv.parentElement) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Event listeners
+        document.getElementById('processBtn').addEventListener('click', processAudio);
+
+        // Close modal when clicking outside
+        document.getElementById('resultModal').addEventListener('click', (e) => {
+            if (e.target.id === 'resultModal') {
+                closeResultModal();
+            }
+        });
+    </script>
+</body>
+</html>

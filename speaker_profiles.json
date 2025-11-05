@@ -1,0 +1,65 @@
+{
+  "speaker_renaud": {
+    "name": "Renaud",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.116570",
+    "last_seen": "2025-11-06T03:26:04.116620",
+    "total_sessions": 1
+  },
+  "speaker_yennefer": {
+    "name": "Yennefer",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.117938",
+    "last_seen": "2025-11-06T03:26:04.117946",
+    "total_sessions": 1
+  },
+  "speaker_yanni": {
+    "name": "Yanni",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.119043",
+    "last_seen": "2025-11-06T03:26:04.119052",
+    "total_sessions": 1
+  },
+  "speaker_claude": {
+    "name": "Claude",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.120181",
+    "last_seen": "2025-11-06T03:26:04.120188",
+    "total_sessions": 1
+  },
+  "speaker_siri": {
+    "name": "Siri",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.121287",
+    "last_seen": "2025-11-06T03:26:04.121294",
+    "total_sessions": 1
+  },
+  "speaker_6": {
+    "name": "Renaud",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.123011",
+    "last_seen": "2025-11-06T03:26:04.123024",
+    "total_sessions": 1
+  },
+  "speaker_7": {
+    "name": "Yanni",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.125283",
+    "last_seen": "2025-11-06T03:26:04.125291",
+    "total_sessions": 1
+  },
+  "speaker_8": {
+    "name": "Claude",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.128110",
+    "last_seen": "2025-11-06T03:26:04.128121",
+    "total_sessions": 1
+  },
+  "speaker_9": {
+    "name": "Here",
+    "voice_characteristics": {},
+    "created_at": "2025-11-06T03:26:04.130740",
+    "last_seen": "2025-11-06T03:26:04.130787",
+    "total_sessions": 1
+  }
+}

@@ -1326,6 +1326,10 @@ class PerfectAIAudioProcessor:
             if not os.path.exists(user_dir):
                 os.makedirs(user_dir)
     
+    def set_session_id(self, session_id):
+        """Set current session ID for database linking."""
+        self.current_session_id = session_id
+    
     def _start_recording_file(self):
         """Initialize recording file for this session."""
         try:
@@ -1386,6 +1390,36 @@ class PerfectAIAudioProcessor:
                 print(f"   📁 File: {self.recording_filename}")
                 print(f"   📊 Size: {file_size / 1024 / 1024:.2f} MB")
                 print(f"   ⏱️ Duration: {duration:.1f} seconds")
+                
+                # Create Recording database entry if we have user and session info
+                try:
+                    if self.user_id and hasattr(self, 'current_session_id') and self.current_session_id:
+                        from models import db, Recording
+                        from flask import current_app
+                        
+                        # Use application context for database operations
+                        with current_app.app_context():
+                            recording = Recording(
+                                user_id=self.user_id,
+                                session_id=self.current_session_id,
+                                filename=os.path.basename(self.recording_filename),
+                                original_filename=os.path.basename(self.recording_filename),
+                                file_path=self.recording_filename,
+                                file_size=file_size,
+                                duration_seconds=int(duration),
+                                audio_format='wav',
+                                sample_rate=RATE,
+                                channels=CHANNELS
+                            )
+                            
+                            db.session.add(recording)
+                            db.session.commit()
+                            
+                            print(f"✅ Recording database entry created: ID={recording.id}")
+                            
+                except Exception as db_error:
+                    print(f"⚠️ Could not create database entry: {db_error}")
+                    # Don't fail the recording save if database fails
                 
                 return self.recording_filename
                 

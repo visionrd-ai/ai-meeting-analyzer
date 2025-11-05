@@ -19,8 +19,10 @@ import time
 import json
 import pickle
 import tempfile
+import numpy as np
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 # Load environment variables FIRST before any other imports
 from dotenv import load_dotenv
 load_dotenv()
@@ -138,6 +140,7 @@ app_state = {
     'voice_isolation_level': 'maximum',  # 'low', 'medium', 'high', 'maximum'
     'noise_cancellation_strength': 'aggressive',  # 'mild', 'moderate', 'aggressive', 'maximum'
     'voice_activity_sensitivity': 0.7,  # 0.1 to 1.0
+    'transcript_segments': [],  # Track transcript segments for speaker diarization
     'background_learning_enabled': True,  # Learn and adapt to background noise
     'echo_cancellation_enabled': True,  # For dual mode
     'real_time_insights': True,  # Generate insights during recording
@@ -275,6 +278,313 @@ def clear_storage():
 # PERFECT AI CORE BUSINESS LOGIC
 # ================================================================
 
+def reset_speaker_detection():
+    """Reset speaker detection for new recording session."""
+    app_state['active_speakers'] = {}
+    app_state['current_speaker_id'] = None
+    app_state['last_speaker_change'] = time.time()
+    app_state['speaker_counter'] = 0
+    app_state['transcript_segments'] = []
+    print("🔄 Voice-based speaker detection reset for new session")
+
+def get_current_speaker_info(text: str, source_label: str):
+    """Get speaker information for current text segment if available."""
+    try:
+        # Use enhanced speaker identification
+        return identify_speaker_from_text(text, source_label)
+        
+    except Exception as e:
+        print(f"Error getting speaker info: {e}")
+        return None
+
+def get_speaker_stats():
+    """Get voice-based speaker statistics for current session."""
+    try:
+        speaker_stats = {}
+        
+        # Get stats from active speakers (voice-based profiles)
+        for speaker_id, profile in app_state.get('active_speakers', {}).items():
+            speaker_name = f"Speaker {speaker_id}"
+            speaker_stats[speaker_name] = {
+                'segments': profile['segments'],
+                'words': profile['total_words'],
+                'avg_word_length': profile['avg_word_length'],
+                'language_pattern': profile['avg_language_pattern'],
+                'speaking_style': profile['avg_speaking_style'],
+                'duration': profile['last_seen'] - profile['first_seen'],
+                'confidence': 0.85  # Default confidence for voice-based detection
+            }
+        
+        # Also count from transcript segments as fallback
+        for segment in app_state.get('transcript_segments', []):
+            speaker = segment.get('speaker', 'Unknown')
+            if speaker not in speaker_stats:
+                speaker_stats[speaker] = {
+                    'segments': 0,
+                    'words': 0,
+                    'confidence': 0.8
+                }
+            
+            if speaker in speaker_stats:
+                # Update from transcript data
+                speaker_stats[speaker]['segments'] = max(
+                    speaker_stats[speaker].get('segments', 0),
+                    speaker_stats[speaker]['segments'] + 1
+                )
+        
+        return speaker_stats
+        
+    except Exception as e:
+        print(f"Error getting speaker stats: {e}")
+        return {}
+
+def identify_speaker_from_text(text: str, source_label: str) -> str:
+    """Identify speaker using simple numbered system (Speaker 1, Speaker 2, etc.)."""
+    return detect_speaker_from_context(text, source_label)
+
+def detect_speaker_from_context(text: str, source_label: str):
+    """Detect speaker using voice-based analysis and conversation patterns."""
+    try:
+        # Initialize speaker tracking if not exists
+        if 'active_speakers' not in app_state:
+            app_state['active_speakers'] = {}
+        if 'current_speaker_id' not in app_state:
+            app_state['current_speaker_id'] = None
+        if 'last_speaker_change' not in app_state:
+            app_state['last_speaker_change'] = time.time()
+        if 'speaker_counter' not in app_state:
+            app_state['speaker_counter'] = 0
+        
+        text_lower = text.lower().strip()
+        
+        # Voice-based speaker identification using text patterns and timing
+        speaker_id = identify_speaker_by_voice_patterns(text, text_lower)
+        
+        return f"Speaker {speaker_id}"
+        
+    except Exception as e:
+        print(f"Error in speaker detection: {e}")
+        # Fallback to simple detection
+        segment_count = len(app_state.get('transcript_segments', []))
+        return f"Speaker {(segment_count % 2) + 1}"
+
+def identify_speaker_by_voice_patterns(text: str, text_lower: str) -> int:
+    """Identify speaker using voice patterns, speech characteristics, and timing."""
+    try:
+        current_time = time.time()
+        time_since_last_change = current_time - app_state['last_speaker_change']
+        
+        # Analyze speech characteristics for speaker identification
+        speech_characteristics = analyze_speech_characteristics(text, text_lower)
+        
+        # Find matching speaker based on characteristics
+        matching_speaker = find_matching_speaker_by_characteristics(speech_characteristics)
+        
+        if matching_speaker is not None:
+            # Update existing speaker profile
+            update_speaker_profile(matching_speaker, speech_characteristics, text)
+            app_state['current_speaker_id'] = matching_speaker
+            return matching_speaker
+        
+        # Check if we should create a new speaker
+        should_create_new_speaker = should_add_new_speaker(speech_characteristics, time_since_last_change)
+        
+        if should_create_new_speaker:
+            # Create new speaker
+            new_speaker_id = create_new_speaker(speech_characteristics, text)
+            app_state['current_speaker_id'] = new_speaker_id
+            app_state['last_speaker_change'] = current_time
+            print(f"🎙️ New speaker detected: Speaker {new_speaker_id}")
+            return new_speaker_id
+        
+        # Use current speaker if no change detected
+        if app_state['current_speaker_id'] is not None:
+            return app_state['current_speaker_id']
+        
+        # Default to Speaker 1 if no speaker set
+        app_state['current_speaker_id'] = 1
+        app_state['speaker_counter'] = 1
+        app_state['active_speakers'][1] = create_speaker_profile(speech_characteristics, text)
+        return 1
+        
+    except Exception as e:
+        print(f"Error in voice pattern identification: {e}")
+        return 1
+
+def analyze_speech_characteristics(text: str, text_lower: str) -> dict:
+    """Analyze speech characteristics from text content."""
+    characteristics = {
+        'text_length': len(text),
+        'word_count': len(text.split()),
+        'avg_word_length': np.mean([len(word) for word in text.split()]) if text.split() else 0,
+        'punctuation_density': sum(1 for c in text if c in '.,!?;:') / len(text) if text else 0,
+        'question_indicator': '?' in text,
+        'exclamation_indicator': '!' in text,
+        'greeting_indicator': any(greeting in text_lower for greeting in ['hello', 'hi', 'hey', 'good morning', 'good afternoon']),
+        'politeness_indicator': any(polite in text_lower for polite in ['thank you', 'thanks', 'please', 'excuse me', 'sorry']),
+        'self_reference': any(ref in text_lower for ref in ['i am', 'my name', 'i\'m', 'me', 'myself']),
+        'language_pattern': detect_language_pattern(text_lower),
+        'speaking_style': detect_speaking_style(text_lower),
+        'timestamp': time.time()
+    }
+    
+    return characteristics
+
+def detect_language_pattern(text_lower: str) -> str:
+    """Detect language or speaking patterns."""
+    # Check for non-English characters or patterns
+    if any(ord(c) > 127 for c in text_lower):
+        return 'non_english'
+    
+    # Check for specific speaking patterns
+    if any(pattern in text_lower for pattern in ['um', 'uh', 'er', 'ah']):
+        return 'hesitant'
+    
+    if any(pattern in text_lower for pattern in ['actually', 'well', 'so', 'basically']):
+        return 'explanatory'
+    
+    return 'standard'
+
+def detect_speaking_style(text_lower: str) -> str:
+    """Detect speaking style characteristics."""
+    if any(formal in text_lower for formal in ['furthermore', 'however', 'therefore', 'consequently']):
+        return 'formal'
+    
+    if any(casual in text_lower for casual in ['yeah', 'yep', 'nah', 'gonna', 'wanna']):
+        return 'casual'
+    
+    if '?' in text_lower:
+        return 'questioning'
+    
+    return 'neutral'
+
+def find_matching_speaker_by_characteristics(characteristics: dict) -> Optional[int]:
+    """Find existing speaker that matches the speech characteristics."""
+    if not app_state['active_speakers']:
+        return None
+    
+    best_match = None
+    best_score = 0
+    
+    for speaker_id, profile in app_state['active_speakers'].items():
+        similarity_score = calculate_speaker_similarity(characteristics, profile)
+        
+        if similarity_score > 0.7 and similarity_score > best_score:  # 70% similarity threshold
+            best_score = similarity_score
+            best_match = speaker_id
+    
+    return best_match
+
+def calculate_speaker_similarity(new_characteristics: dict, speaker_profile: dict) -> float:
+    """Calculate similarity between new speech and existing speaker profile."""
+    try:
+        score = 0
+        total_weight = 0
+        
+        # Compare language patterns (high weight)
+        if new_characteristics['language_pattern'] == speaker_profile['avg_language_pattern']:
+            score += 0.3
+        total_weight += 0.3
+        
+        # Compare speaking style (high weight)
+        if new_characteristics['speaking_style'] == speaker_profile['avg_speaking_style']:
+            score += 0.25
+        total_weight += 0.25
+        
+        # Compare self-reference patterns (medium weight)
+        if new_characteristics['self_reference'] == speaker_profile['avg_self_reference']:
+            score += 0.2
+        total_weight += 0.2
+        
+        # Compare politeness patterns (medium weight)
+        if new_characteristics['politeness_indicator'] == speaker_profile['avg_politeness']:
+            score += 0.15
+        total_weight += 0.15
+        
+        # Compare word length patterns (low weight)
+        word_length_diff = abs(new_characteristics['avg_word_length'] - speaker_profile['avg_word_length'])
+        if word_length_diff < 1.0:  # Similar word length
+            score += 0.1
+        total_weight += 0.1
+        
+        return score / total_weight if total_weight > 0 else 0
+        
+    except Exception as e:
+        print(f"Error calculating speaker similarity: {e}")
+        return 0
+
+def should_add_new_speaker(characteristics: dict, time_since_last_change: float) -> bool:
+    """Determine if we should add a new speaker."""
+    # Strong indicators for new speaker
+    strong_indicators = [
+        characteristics['greeting_indicator'],  # New greeting
+        characteristics['self_reference'],      # Self-introduction
+        time_since_last_change > 8,            # Long pause
+    ]
+    
+    # Medium indicators
+    medium_indicators = [
+        characteristics['language_pattern'] != 'standard',  # Different language
+        time_since_last_change > 5,                        # Medium pause
+        characteristics['question_indicator']               # Asking questions
+    ]
+    
+    # Create new speaker if we have strong indicators or multiple medium indicators
+    strong_count = sum(strong_indicators)
+    medium_count = sum(medium_indicators)
+    
+    return strong_count >= 1 or medium_count >= 2
+
+def create_new_speaker(characteristics: dict, text: str) -> int:
+    """Create a new speaker profile."""
+    app_state['speaker_counter'] += 1
+    speaker_id = app_state['speaker_counter']
+    
+    app_state['active_speakers'][speaker_id] = create_speaker_profile(characteristics, text)
+    
+    return speaker_id
+
+def create_speaker_profile(characteristics: dict, text: str) -> dict:
+    """Create a speaker profile from characteristics."""
+    return {
+        'segments': 1,
+        'total_words': characteristics['word_count'],
+        'avg_word_length': characteristics['avg_word_length'],
+        'avg_language_pattern': characteristics['language_pattern'],
+        'avg_speaking_style': characteristics['speaking_style'],
+        'avg_self_reference': characteristics['self_reference'],
+        'avg_politeness': characteristics['politeness_indicator'],
+        'first_seen': time.time(),
+        'last_seen': time.time(),
+        'sample_texts': [text[:100]]  # Store sample for reference
+    }
+
+def update_speaker_profile(speaker_id: int, characteristics: dict, text: str):
+    """Update existing speaker profile with new characteristics."""
+    if speaker_id not in app_state['active_speakers']:
+        return
+    
+    profile = app_state['active_speakers'][speaker_id]
+    
+    # Update with exponential moving average
+    alpha = 0.3  # Learning rate
+    
+    profile['segments'] += 1
+    profile['total_words'] += characteristics['word_count']
+    profile['avg_word_length'] = (1 - alpha) * profile['avg_word_length'] + alpha * characteristics['avg_word_length']
+    profile['last_seen'] = time.time()
+    
+    # Update categorical patterns (use most recent if different)
+    if characteristics['language_pattern'] != profile['avg_language_pattern']:
+        profile['avg_language_pattern'] = characteristics['language_pattern']
+    
+    if characteristics['speaking_style'] != profile['avg_speaking_style']:
+        profile['avg_speaking_style'] = characteristics['speaking_style']
+    
+    # Store sample text
+    if len(profile['sample_texts']) < 5:
+        profile['sample_texts'].append(text[:100])
+
 def on_new_transcript(text: str, source_label: str = "Mic"):
     """
     Perfect AI callback for new transcript segments with advanced processing.
@@ -294,6 +604,20 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
         segments = load_transcripts()
         segments.append(formatted_text)
         save_transcripts(segments)
+        
+        # Track segments for speaker diarization
+        if 'transcript_segments' not in app_state:
+            app_state['transcript_segments'] = []
+        
+        # Get speaker information
+        speaker_info = get_current_speaker_info(text, source_label)
+        
+        app_state['transcript_segments'].append({
+            'text': text,
+            'source': source_label,
+            'speaker': speaker_info,
+            'timestamp': datetime.now().isoformat()
+        })
         
         # Save to database if we have an active session
         if app_state.get('current_session_id'):
@@ -348,9 +672,12 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
         processing_time = (time.time() - start_time) * 1000
         print(f"🎯 PERFECT AI [{source_label}] {text[:50]}... (processed in {processing_time:.1f}ms)")
         
+        # Get speaker information if available
+        speaker_info = get_current_speaker_info(text, source_label)
+        
         # Emit real-time perfect AI transcript update with better error handling
         try:
-            socketio.emit('perfect_transcript_update', {
+            update_data = {
                 'new_text': formatted_text,
                 'full_text': metrics['full_text'],
                 'word_count': metrics['word_count'],
@@ -362,7 +689,13 @@ def on_new_transcript(text: str, source_label: str = "Mic"):
                 'perfect_ai_quality': metrics.get('audio_quality', 95),
                 'voice_isolation_score': metrics.get('voice_isolation_score', 90),
                 'noise_reduction_db': metrics.get('noise_reduction_db', 15)
-            })
+            }
+            
+            # Add speaker information if available
+            if speaker_info:
+                update_data['speaker'] = speaker_info
+            
+            socketio.emit('perfect_transcript_update', update_data)
             print(f"✅ Perfect AI transcript update sent successfully")
         except Exception as e:
             print(f"❌ Failed to emit transcript update: {e}")
@@ -525,7 +858,13 @@ def start_perfect_ai_recording(
         app_state['current_session_id'] = session.id
         app_state['recording_session_id'] = session.session_id
         
+        # Set session ID in audio processor for database linking
+        app_state['audio_processor'].set_session_id(session.id)
+        
         print(f"📊 Session IDs stored - current_session_id: {app_state['current_session_id']}, recording_session_id: {app_state['recording_session_id']}")
+        
+        # Reset speaker detection for new session
+        reset_speaker_detection()
         
         # Start perfect AI recording
         print("🎯 Starting Perfect AI recording...")
@@ -559,7 +898,7 @@ def start_perfect_ai_recording(
         }
 
 def stop_perfect_ai_recording():
-    """Stop perfect AI recording and generate final analysis."""
+    """Stop perfect AI recording and generate final analysis with speaker diarization."""
     try:
         # Stop perfect AI audio processing
         if app_state['audio_processor']:
@@ -605,7 +944,7 @@ def stop_perfect_ai_recording():
                 "message": "⚠️ No transcripts found! Please ensure you spoke during the recording."
             }
         
-        # Generate perfect AI final analysis
+        # Generate perfect AI final analysis with speaker diarization
         def generate_perfect_ai_final_analysis():
             try:
                 xai_key = os.getenv("XAI_API_KEY")
@@ -616,6 +955,60 @@ def stop_perfect_ai_recording():
                     
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
                     full_transcript = " ".join(segments)
+                    
+                    # Process speaker diarization if AssemblyAI is available
+                    speaker_diarization_result = None
+                    try:
+                        assemblyai_key = os.getenv("ASSEMBLYAI_API_KEY")
+                        if assemblyai_key and app_state.get('current_session_id'):
+                            print("🎙️ Starting speaker diarization...")
+                            
+                            # Emit speaker diarization start
+                            socketio.emit('speaker_diarization_start', {
+                                'timestamp': datetime.now().strftime("%H:%M:%S"),
+                                'message': 'Processing speaker diarization...'
+                            })
+                            
+                            # Get the latest recording file for this session
+                            with app.app_context():
+                                session = RecordingSession.query.get(app_state['current_session_id'])
+                                if session and session.recordings:
+                                    latest_recording = session.recordings[-1]  # Get the most recent recording
+                                    audio_file_path = latest_recording.file_path
+                                    
+                                    if os.path.exists(audio_file_path):
+                                        from speaker_diarization import AssemblyAISpeakerDiarization
+                                        
+                                        diarizer = AssemblyAISpeakerDiarization(assemblyai_key)
+                                        speaker_diarization_result = diarizer.process_audio_file(audio_file_path)
+                                        
+                                        if speaker_diarization_result.get('success'):
+                                            print("✅ Speaker diarization completed")
+                                            
+                                            # Save speaker diarization to database
+                                            session.speaker_diarization = json.dumps(speaker_diarization_result)
+                                            session.speaker_count = speaker_diarization_result.get('summary', {}).get('total_speakers', 0)
+                                            session.diarization_confidence = speaker_diarization_result.get('summary', {}).get('confidence_score', 0)
+                                            session.diarization_generated_at = datetime.utcnow()
+                                            db.session.commit()
+                                            
+                                            # Emit speaker diarization complete
+                                            socketio.emit('speaker_diarization_complete', {
+                                                'timestamp': datetime.now().strftime("%H:%M:%S"),
+                                                'result': speaker_diarization_result,
+                                                'speaker_count': session.speaker_count
+                                            })
+                                        else:
+                                            print(f"⚠️ Speaker diarization failed: {speaker_diarization_result.get('error')}")
+                                    else:
+                                        print("⚠️ Audio file not found for speaker diarization")
+                                else:
+                                    print("⚠️ No recordings found for speaker diarization")
+                        else:
+                            print("⚠️ AssemblyAI API key not configured - skipping speaker diarization")
+                    except Exception as diarization_error:
+                        print(f"⚠️ Speaker diarization error: {diarization_error}")
+                        # Don't fail the entire process if diarization fails
                     
                     # Initialize perfect AI chat
                     if app_state['first_recording_done']:
@@ -669,7 +1062,8 @@ def stop_perfect_ai_recording():
                         'is_final': True,
                         'timestamp': datetime.now().strftime("%H:%M:%S"),
                         'perfect_ai_quality_score': 95,
-                        'refresh_transcript_page': True  # Signal to refresh page 2
+                        'refresh_transcript_page': True,  # Signal to refresh page 2
+                        'speaker_diarization': speaker_diarization_result
                     })
                     
                     # Emit perfect AI chat unlock
@@ -702,7 +1096,7 @@ def stop_perfect_ai_recording():
         
         return {
             "success": True, 
-            "message": "✅ Perfect AI recording stopped. Generating final analysis..."
+            "message": "✅ Perfect AI recording stopped. Generating final analysis and speaker diarization..."
         }
         
     except Exception as e:
@@ -873,6 +1267,23 @@ def calculate_perfect_ai_metrics():
         'noise_reduction_db': noise_reduction_db
     }
 
+def calculate_fresh_metrics():
+    """Calculate fresh metrics for new sessions (no old data)."""
+    return {
+        'duration': 0,
+        'word_count': 0,
+        'wpm': 0,
+        'confidence': 0,
+        'momentum': 0,
+        'tech_depth': 0,
+        'insights': 0,
+        'segments_count': 0,
+        'full_text': "",
+        'audio_quality': 95,
+        'voice_isolation_score': 90,
+        'noise_reduction_db': 15
+    }
+
 def calculate_analysis_confidence(analysis):
     """Calculate Perfect AI analysis confidence score."""
     try:
@@ -975,8 +1386,15 @@ def index():
 @app.route('/transcript')
 @login_required
 def transcript():
-    """Perfect AI Live Transcript."""
-    metrics = calculate_perfect_ai_metrics()
+    """Perfect AI Live Transcript - Fresh Start Only."""
+    # Clear old data when accessing Live Transcript page
+    if not app_state['is_recording']:
+        clear_storage()
+        app_state['transcript_segments'] = []
+        reset_speaker_detection()
+    
+    # Use fresh metrics (no old data)
+    metrics = calculate_fresh_metrics()
     
     status_text = "READY FOR PERFECT AI RECORDING"
     status_color = "#10B981"
@@ -1004,8 +1422,16 @@ def transcript():
 @app.route('/analysis')
 @login_required
 def analysis():
-    """Perfect AI Analysis."""
-    metrics = calculate_perfect_ai_metrics()
+    """Perfect AI Analysis - Fresh Start Only."""
+    # Clear old data when accessing AI Analysis page
+    if not app_state['is_recording']:
+        clear_storage()
+        app_state['current_analysis'] = None
+        app_state['final_summary'] = None
+        app_state['transcript_segments'] = []
+    
+    # Use fresh metrics (no old data)
+    metrics = calculate_fresh_metrics()
     
     status_text = "READY FOR PERFECT AI RECORDING"
     status_color = "#10B981"
@@ -1018,8 +1444,8 @@ def analysis():
         'is_recording': app_state['is_recording'],
         'status_text': status_text,
         'status_color': status_color,
-        'analysis': app_state['final_summary'] or app_state['current_analysis'],
-        'final_summary': app_state['final_summary'],
+        'analysis': None,  # Always start fresh - no old analysis
+        'final_summary': None,  # Always start fresh
         'session_id': app_state['recording_session_id'],
         'total_sessions': app_state['total_sessions'],
         'total_meetings_analyzed': app_state['total_meetings_analyzed'],
@@ -1140,9 +1566,9 @@ def get_status():
 @app.route('/api/transcript')
 @login_required
 def get_transcript():
-    """Perfect AI transcript endpoint - user-specific data only."""
-    # Only return transcript data for the current user's session
-    if app_state['recording_session_id']:
+    """Perfect AI transcript endpoint - current session only (no old data)."""
+    # Only return transcript data if actively recording
+    if app_state['is_recording'] and app_state['recording_session_id']:
         # Get session from database to verify ownership
         session = RecordingSession.query.filter_by(
             session_id=app_state['recording_session_id'],
@@ -1157,16 +1583,18 @@ def get_transcript():
                 'segment_count': len(segments),
                 'perfect_ai_processed': True,
                 'user_id': current_user.id,
-                'session_id': app_state['recording_session_id']
+                'session_id': app_state['recording_session_id'],
+                'is_recording': True
             })
     
-    # Return empty data if no valid session
+    # Return empty data for fresh start (no old data)
     return jsonify({
         'segments': [],
         'full_text': "",
         'segment_count': 0,
         'perfect_ai_processed': True,
-        'user_id': current_user.id
+        'user_id': current_user.id,
+        'message': 'No active recording - start recording to see transcript'
     })
 
 # ================================================================
@@ -1268,8 +1696,17 @@ def handle_heartbeat():
 # ================================================================
 
 def initialize_perfect_ai_app():
-    """Initialize Perfect AI application."""
+    """Initialize Perfect AI application with fresh start."""
     print("🚀 Initializing Perfect AI Meeting Analyzer...")
+    
+    # Clear any old data on startup for fresh start
+    print("🧹 Clearing old session data for fresh start...")
+    clear_storage()
+    app_state['transcript_segments'] = []
+    app_state['current_analysis'] = None
+    app_state['final_summary'] = None
+    app_state['is_recording'] = False
+    reset_speaker_detection()
     
     load_app_stats()
     
@@ -1288,6 +1725,7 @@ def initialize_perfect_ai_app():
     
     print(f"📊 Total sessions: {app_state['total_sessions']}")
     print(f"📈 Total meetings analyzed: {app_state['total_meetings_analyzed']}")
+    print("✅ Fresh start initialized - no old data will be shown")
     print("🎯 Perfect AI Meeting Analyzer is ready!")
     print("🌐 Open http://localhost:5000 in your browser to start")
 
@@ -1480,6 +1918,9 @@ def test_db():
             'error': str(e)
         }), 500
 
+# Speaker diarization is now integrated into the main recording process
+# and displayed in Live Transcript, AI Analysis, and History pages
+
 @app.route('/history')
 @login_required
 def history():
@@ -1583,6 +2024,86 @@ def get_session_analysis(session_id):
         return jsonify({
             'success': True,
             'analysis': analysis
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/speakers')
+@login_required
+def get_speakers():
+    """Get all known speakers."""
+    try:
+        profiles = load_speaker_profiles()
+        return jsonify({
+            'success': True,
+            'speakers': profiles
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/speakers', methods=['POST'])
+@login_required
+def add_speaker():
+    """Add or update a speaker."""
+    try:
+        data = request.get_json()
+        speaker_id = data.get('speaker_id')
+        name = data.get('name')
+        
+        if not speaker_id or not name:
+            return jsonify({
+                'success': False,
+                'error': 'Speaker ID and name are required'
+            })
+        
+        add_speaker_profile(speaker_id, name)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Speaker {name} added successfully'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/session/<session_id>/speaker-diarization')
+@login_required
+def get_session_speaker_diarization(session_id):
+    """Get speaker diarization for a specific session."""
+    try:
+        session = RecordingSession.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not session:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            })
+        
+        speaker_diarization = None
+        if session.speaker_diarization:
+            speaker_diarization = json.loads(session.speaker_diarization)
+        
+        return jsonify({
+            'success': True,
+            'speaker_diarization': speaker_diarization,
+            'session_info': {
+                'speaker_count': session.speaker_count,
+                'diarization_confidence': session.diarization_confidence,
+                'diarization_generated_at': session.diarization_generated_at.isoformat() if session.diarization_generated_at else None
+            }
         })
         
     except Exception as e:

@@ -389,6 +389,103 @@
             color: var(--perfect-ai);
         }
 
+        /* Speaker Diarization Styles */
+        .speaker-diarization-status {
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .diarization-processing {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner-small {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--perfect-ai);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .speaker-stats {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .speaker-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            border-left: 3px solid var(--perfect-ai);
+        }
+
+        .speaker-label {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .speaker-time {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .transcript-segment.speaker-1 {
+            border-left-color: #dc2626;
+            background: #fef2f2;
+        }
+
+        .transcript-segment.speaker-2 {
+            border-left-color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .transcript-segment.speaker-3 {
+            border-left-color: #059669;
+            background: #ecfdf5;
+        }
+
+        .transcript-segment.speaker-4 {
+            border-left-color: #d97706;
+            background: #fffbeb;
+        }
+
+        .speaker-tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .speaker-tag.speaker-1 {
+            background: #dc2626;
+            color: white;
+        }
+
+        .speaker-tag.speaker-2 {
+            background: #2563eb;
+            color: white;
+        }
+
+        .speaker-tag.speaker-3 {
+            background: #059669;
+            color: white;
+        }
+
+        .speaker-tag.speaker-4 {
+            background: #d97706;
+            color: white;
+        }
+
         .word-cloud {
             display: flex;
             flex-wrap: wrap;
@@ -570,6 +667,7 @@
                         <button class="control-btn" onclick="clearTranscript()">🗑️ Clear</button>
                         <button class="control-btn" onclick="exportTranscript()">📄 Export</button>
                         <button class="control-btn" onclick="toggleAutoScroll()" id="auto-scroll-btn">📜 Auto-scroll</button>
+                        <button class="control-btn" onclick="showSpeakerManager()">👥 Speakers</button>
                     </div>
                 </div>
                 <div class="transcript-content" id="transcript-content">
@@ -648,6 +746,22 @@
                     </div>
                 </div>
 
+                <!-- Speaker Diarization -->
+                <div class="sidebar-card" id="speaker-diarization-card" style="display: none;">
+                    <h4>🎙️ Speaker Analysis</h4>
+                    <div id="speaker-diarization-content">
+                        <div class="speaker-diarization-status" id="diarization-status">
+                            <div class="diarization-processing">
+                                <div class="spinner-small"></div>
+                                <span>Processing speakers...</span>
+                            </div>
+                        </div>
+                        <div class="speaker-stats" id="speaker-stats" style="display: none;">
+                            <!-- Speaker statistics will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Key Topics -->
                 <div class="sidebar-card">
                     <h4>🏷️ Key Topics</h4>
@@ -674,6 +788,56 @@
                         </div>
                         <div>
                             <strong>Quality:</strong> Maximum
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Speaker Management Modal -->
+    <div class="modal" id="speakerManagerModal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>👥 Speaker Management</h3>
+                <button class="modal-close" onclick="closeSpeakerManager()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="speaker-manager">
+                    <div class="speaker-info-section">
+                        <h4>Speaker Information</h4>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                            The system automatically assigns speakers as "Speaker 1", "Speaker 2", "Speaker 3", etc. 
+                            based on conversation patterns and timing.
+                        </p>
+                        
+                        <div class="speaker-colors">
+                            <h5>Speaker Color Coding:</h5>
+                            <div style="display: grid; gap: 0.5rem; margin-top: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="width: 20px; height: 20px; background: #dc2626; border-radius: 4px;"></div>
+                                    <span>Speaker 1</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="width: 20px; height: 20px; background: #2563eb; border-radius: 4px;"></div>
+                                    <span>Speaker 2</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="width: 20px; height: 20px; background: #059669; border-radius: 4px;"></div>
+                                    <span>Speaker 3</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="width: 20px; height: 20px; background: #d97706; border-radius: 4px;"></div>
+                                    <span>Speaker 4</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="current-session-speakers" style="margin-top: 1.5rem;">
+                            <h5>Current Session Speakers:</h5>
+                            <div id="sessionSpeakersList">
+                                <p style="color: var(--text-secondary); font-style: italic;">Start recording to see speakers</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -754,6 +918,11 @@
             socket.on('perfect_final_analysis_complete', function(data) {
                 console.log('🎯 Perfect AI final analysis complete - refreshing transcript page');
                 
+                // Handle speaker diarization if available
+                if (data.speaker_diarization && data.speaker_diarization.success) {
+                    displaySpeakerDiarization(data.speaker_diarization);
+                }
+                
                 // Always refresh when analysis is complete to show updated data
                 showRefreshNotification();
                 
@@ -761,6 +930,21 @@
                 setTimeout(function() {
                     window.location.reload();
                 }, 2000);
+            });
+
+            socket.on('speaker_diarization_start', function(data) {
+                console.log('🎙️ Speaker diarization started');
+                showSpeakerDiarizationCard();
+                updateDiarizationStatus('Processing speakers...', true);
+            });
+
+            socket.on('speaker_diarization_complete', function(data) {
+                console.log('🎙️ Speaker diarization completed:', data);
+                if (data.result && data.result.success) {
+                    displaySpeakerDiarization(data.result);
+                } else {
+                    updateDiarizationStatus('Speaker analysis failed', false);
+                }
             });
             
             socket.on('perfect_analysis_update', function(data) {
@@ -786,6 +970,219 @@
                 indicator.classList.add('active');
             } else {
                 indicator.classList.remove('active');
+            }
+        }
+
+        // Speaker Diarization Functions
+        function showSpeakerDiarizationCard() {
+            const card = document.getElementById('speaker-diarization-card');
+            if (card) {
+                card.style.display = 'block';
+            }
+        }
+
+        function updateDiarizationStatus(message, isProcessing) {
+            const statusElement = document.getElementById('diarization-status');
+            if (statusElement) {
+                if (isProcessing) {
+                    statusElement.innerHTML = `
+                        <div class="diarization-processing">
+                            <div class="spinner-small"></div>
+                            <span>${message}</span>
+                        </div>
+                    `;
+                } else {
+                    statusElement.innerHTML = `<div style="color: var(--text-secondary);">${message}</div>`;
+                }
+            }
+        }
+
+        function updateSpeakerDisplay(data) {
+            // Show speaker diarization card if not already visible
+            showSpeakerDiarizationCard();
+            
+            // Update speaker statistics
+            const speakerStatsElement = document.getElementById('speaker-stats');
+            if (speakerStatsElement && data.speaker) {
+                // Get current speaker stats or initialize
+                if (!window.speakerStats) {
+                    window.speakerStats = {};
+                }
+                
+                const speaker = data.speaker;
+                if (!window.speakerStats[speaker]) {
+                    window.speakerStats[speaker] = {
+                        segments: 0,
+                        totalTime: 0,
+                        words: 0
+                    };
+                }
+                
+                // Update stats
+                window.speakerStats[speaker].segments++;
+                window.speakerStats[speaker].words += (data.new_text || '').split(' ').length;
+                
+                // Display updated stats
+                displaySpeakerStats();
+            }
+        }
+
+        function displaySpeakerStats() {
+            const speakerStatsElement = document.getElementById('speaker-stats');
+            const statusElement = document.getElementById('diarization-status');
+            
+            if (!speakerStatsElement || !window.speakerStats) return;
+            
+            // Hide processing status
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
+            
+            // Show stats
+            speakerStatsElement.style.display = 'block';
+            
+            let statsHtml = '';
+            Object.keys(window.speakerStats).forEach(speaker => {
+                const stats = window.speakerStats[speaker];
+                const speakerNum = speaker.replace('Speaker ', '');
+                
+                statsHtml += `
+                    <div class="speaker-item">
+                        <div class="speaker-label" style="color: ${getSpeakerColor(speakerNum)};">
+                            🎙️ ${speaker}
+                        </div>
+                        <div class="speaker-time">
+                            ${stats.segments} segments • ${stats.words} words
+                        </div>
+                    </div>
+                `;
+            });
+            
+            speakerStatsElement.innerHTML = statsHtml;
+        }
+
+        function getSpeakerColor(speakerNum) {
+            const colors = {
+                '1': '#dc2626',
+                '2': '#2563eb', 
+                '3': '#059669',
+                '4': '#d97706'
+            };
+            return colors[speakerNum] || '#6b7280';
+        }
+
+        function fetchSpeakerDiarization() {
+            // Fetch speaker diarization data for current session
+            const sessionId = '{{ session_id }}';
+            if (!sessionId) return;
+            
+            fetch(`/api/session/${sessionId}/speaker-diarization`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.speaker_diarization) {
+                        console.log('🎙️ Speaker diarization data loaded:', data.speaker_diarization);
+                        
+                        // Update existing transcript segments with speaker info
+                        if (data.speaker_diarization.segments) {
+                            updateTranscriptWithSpeakers(data.speaker_diarization.segments);
+                        }
+                        
+                        // Show speaker diarization card
+                        showSpeakerDiarizationCard();
+                        updateDiarizationStatus('Speaker analysis complete', false);
+                        
+                        // Display speaker statistics
+                        if (data.speaker_diarization.speaker_statistics) {
+                            displaySpeakerStatistics(data.speaker_diarization.speaker_statistics);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching speaker diarization:', error);
+                });
+        }
+
+        function displaySpeakerDiarization(result) {
+            const card = document.getElementById('speaker-diarization-card');
+            const statusElement = document.getElementById('diarization-status');
+            const statsElement = document.getElementById('speaker-stats');
+            
+            if (!card || !result.success) return;
+            
+            // Show the card
+            card.style.display = 'block';
+            
+            // Hide processing status
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
+            
+            // Show speaker statistics
+            if (statsElement && result.speaker_statistics) {
+                statsElement.style.display = 'block';
+                
+                const summary = result.summary || {};
+                const speakerStats = result.speaker_statistics || {};
+                
+                let statsHTML = `
+                    <div class="speaker-item">
+                        <span class="speaker-label">Total Speakers</span>
+                        <span class="speaker-time">${summary.total_speakers || 0}</span>
+                    </div>
+                `;
+                
+                // Add individual speaker stats
+                Object.keys(speakerStats).forEach((speakerId, index) => {
+                    const stats = speakerStats[speakerId];
+                    const duration = Math.round(stats.total_duration / 1000); // Convert to seconds
+                    const speakerClass = `speaker-${parseInt(speakerId) + 1}`;
+                    
+                    statsHTML += `
+                        <div class="speaker-item">
+                            <span class="speaker-label">Speaker ${parseInt(speakerId) + 1}</span>
+                            <span class="speaker-time">${duration}s (${stats.total_words} words)</span>
+                        </div>
+                    `;
+                });
+                
+                statsElement.innerHTML = statsHTML;
+            }
+            
+            // Update transcript segments with speaker labels
+            updateTranscriptWithSpeakers(result.segments);
+        }
+
+        function updateTranscriptWithSpeakers(segments) {
+            if (!segments || segments.length === 0) return;
+            
+            const transcriptContent = document.getElementById('transcript-content');
+            if (!transcriptContent) return;
+            
+            // Clear existing content
+            transcriptContent.innerHTML = '';
+            
+            // Add segments with speaker labels
+            segments.forEach(segment => {
+                const segmentDiv = document.createElement('div');
+                const speakerClass = `speaker-${segment.speaker.replace('Speaker ', '')}`;
+                segmentDiv.className = `transcript-segment ${speakerClass}`;
+                
+                segmentDiv.innerHTML = `
+                    <div class="segment-header">
+                        <div class="segment-source">
+                            <span class="speaker-tag ${speakerClass}">${segment.speaker}</span>
+                        </div>
+                        <div class="segment-timestamp">${segment.start_formatted}</div>
+                    </div>
+                    <div class="segment-text">${segment.text}</div>
+                `;
+                
+                transcriptContent.appendChild(segmentDiv);
+            });
+            
+            // Auto-scroll to bottom if enabled
+            if (autoScroll) {
+                transcriptContent.scrollTop = transcriptContent.scrollHeight;
             }
         }
 
@@ -835,10 +1232,25 @@
             
             // Create new segment
             const segment = document.createElement('div');
-            segment.className = `transcript-segment ${data.source_label.toLowerCase()}-source`;
+            let segmentClass = `transcript-segment ${data.source_label.toLowerCase()}-source`;
+            
+            // Add speaker class if speaker information is available
+            if (data.speaker) {
+                const speakerNum = data.speaker.toLowerCase().replace('speaker ', '').replace('speaker_', '');
+                segmentClass += ` speaker-${speakerNum}`;
+            }
+            
+            segment.className = segmentClass;
             
             const sourceIcon = data.source_label === 'Mic' ? '🎤' : '🔊';
             const sourceColor = data.source_label === 'Mic' ? 'var(--perfect-ai)' : 'var(--accent)';
+            
+            // Create speaker tag if speaker information is available
+            let speakerTag = '';
+            if (data.speaker) {
+                const speakerNum = data.speaker.replace('Speaker ', '');
+                speakerTag = `<div class="speaker-tag speaker-${speakerNum}">${data.speaker}</div>`;
+            }
             
             segment.innerHTML = `
                 <div class="segment-header">
@@ -848,6 +1260,7 @@
                     </div>
                     <div class="segment-timestamp">${data.timestamp}</div>
                 </div>
+                ${speakerTag}
                 <div class="segment-text">${data.new_text}</div>
             `;
             
@@ -863,6 +1276,12 @@
             
             // Update key topics
             updateKeyTopics(data.full_text);
+            
+            // Update speaker diarization display if speaker info is available
+            if (data.speaker) {
+                updateSpeakerDisplay(data);
+                updateSessionSpeakers();
+            }
         }
 
         function updateMetrics(data) {
@@ -1040,10 +1459,108 @@
             }, 12000);
         }
 
+        // Speaker Management Functions
+        function showSpeakerManager() {
+            const modal = document.getElementById('speakerManagerModal');
+            modal.style.display = 'flex';
+            loadCurrentSpeakers();
+        }
+
+        function closeSpeakerManager() {
+            const modal = document.getElementById('speakerManagerModal');
+            modal.style.display = 'none';
+        }
+
+        function loadCurrentSpeakers() {
+            // Update session speakers display
+            updateSessionSpeakers();
+        }
+
+        function updateSessionSpeakers() {
+            const container = document.getElementById('sessionSpeakersList');
+            
+            // Count speakers from current transcript segments
+            const speakerCounts = {};
+            transcriptSegments.forEach(segment => {
+                if (segment.speaker) {
+                    if (!speakerCounts[segment.speaker]) {
+                        speakerCounts[segment.speaker] = 0;
+                    }
+                    speakerCounts[segment.speaker]++;
+                }
+            });
+            
+            if (Object.keys(speakerCounts).length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">Start recording to see speakers</p>';
+                return;
+            }
+            
+            let html = '';
+            Object.entries(speakerCounts).forEach(([speaker, count]) => {
+                const speakerNum = speaker.replace('Speaker ', '');
+                const color = getSpeakerColor(speakerNum);
+                
+                html += `
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div style="width: 16px; height: 16px; background: ${color}; border-radius: 4px;"></div>
+                        <span><strong>${speaker}</strong>: ${count} segments</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             initializePerfectAISocket();
             updateRecordingIndicator();
+            
+            // Fetch speaker diarization data if available
+            fetchSpeakerDiarization();
+            
+            // Add modal styling
+            const style = document.createElement('style');
+            style.textContent = `
+                .modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10000;
+                }
+                .modal-content {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: var(--shadow-xl);
+                    max-width: 90vw;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                }
+                .modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 1.5rem;
+                    border-bottom: 1px solid var(--border);
+                }
+                .modal-close {
+                    background: none;
+                    border: none;
+                    font-size: 1.5rem;
+                    cursor: pointer;
+                    color: var(--text-secondary);
+                }
+                .modal-body {
+                    padding: 1.5rem;
+                }
+            `;
+            document.head.appendChild(style);
             
             // Update duration every second
             setInterval(() => {
