@@ -40,6 +40,10 @@ import json
 import ssl
 from utils.read_segements import read_minute_segments_snapshot
 from live_chat import LiveMeetingChatGrok, render_references
+from rag_helper import build_segments_from_double_space_transcript
+from rag import RAGManager
+
+ragManager = RAGManager()
 
 # ================================================================
 # PERFECT AI FLASK APPLICATION SETUP
@@ -977,7 +981,17 @@ def stop_perfect_ai_recording():
                     
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
                     full_transcript = " ".join(segments)
-                    
+                    full_transcript_rag = build_segments_from_double_space_transcript("  ".join(segments))
+                    ragManager.create_embeddings_from_segments(
+                        user_id=current_user.id,
+                        session_id=app_state['current_session_id'],
+                        segments=full_transcript_rag,
+                        chunk_token_budget=50,
+                        sentence_overlap=2,
+                        max_gap_seconds=1,
+                    )
+
+ 
                     # Process speaker diarization if AssemblyAI is available
                     speaker_diarization_result = None
                     try:
@@ -1035,9 +1049,9 @@ def stop_perfect_ai_recording():
                     # Initialize perfect AI chat
                     if app_state['first_recording_done']:
                         if not app_state['chat_instance']:
-                            app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'])
+                            app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'], rag_user_id=current_user.id)
                         else:
-                            app_state['chat_instance'].reset_chat(full_transcript, app_state['final_summary'])
+                            app_state['chat_instance'].reset_chat(full_transcript, app_state['final_summary'], user_id=current_user.id)
                     else:
                         app_state['first_recording_done'] = True
                     
@@ -1876,7 +1890,7 @@ def chat_with_ai():
                     include_empty_minutes=True,
                     max_bytes=MAX_BYTES_TO_READ
                 )
-                result = app_state['live_chat_instance'].ask(message, segments=segments)
+                result = app_state['live_chat_instance'].ask(message, segments=segments, user_id=current_user.id)
                 response = result['answer']
                 if APPEND_CITATIONS:
                     response += render_references(result.get('references', []))

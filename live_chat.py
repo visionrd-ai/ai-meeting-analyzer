@@ -1,14 +1,14 @@
 import json, time, random
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 from openai import OpenAI
-from prompts.system.live_chat import LIVE_SYSTEM_PROMPT
+from prompts.system.live_chat import LIVE_SYSTEM_PROMPT, LIVE_SYSTEM_PROMPT_WITH_RAG
 
 from dotenv import load_dotenv
+load_dotenv()
 
-load_dotenv()  # take environment variables from .env file
+from rag import RAGManager
 
-
-GROK_MODEL = "grok-4-fast-reasoning"  # keep your existing model id
+GROK_MODEL = "grok-4-fast-reasoning"
 
 def _coerce_minute_keys(segments: Dict[str, str]) -> Dict[int, str]:
     out = {}
@@ -16,7 +16,6 @@ def _coerce_minute_keys(segments: Dict[str, str]) -> Dict[int, str]:
         try:
             out[int(k)] = v or ""
         except Exception:
-            # ignore bad keys
             continue
     return out
 
@@ -25,10 +24,6 @@ def _build_window_text(
     end_minute: int | None = None,
     window_min: int = 15
 ) -> Tuple[int, int, str]:
-    """
-    Returns (start_minute, end_minute, window_text) where both ends are inclusive.
-    Picks the latest minute as end if not provided. Clamps to 0..max_minute.
-    """
     segs = _coerce_minute_keys(segments)
     if not segs:
         return 0, 0, "[NO TRANSCRIPT PROVIDED]"
@@ -58,6 +53,213 @@ def _safe_json_parse(s: str) -> Dict[str, Any] | None:
         return json.loads(s)
     except Exception:
         return None
+
+def _fmt_ts_local(ts: Optional[float]) -> str:
+    if ts is None:
+        return "—"
+    try:
+        from zoneinfo import ZoneInfo
+        import datetime as _dt
+        return _dt.datetime.fromtimestamp(float(ts), ZoneInfo("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        import datetime as _dt
+        return _dt.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M:%S")
+
+class LiveMeetingChatGrok:
+    """
+    Live chat that:
+      - injects last N minutes of transcript,
+      - expands window on demand,
+      - falls back to RAG (old meetings) when the window lacks evidence.
+    """
+
+    def __init__(
+        self,
+        api_key_grok: str,
+        live_system_prompt: str = LIVE_SYSTEM_PROMPT,
+        rag_system_prompt: str = LIVE_SYSTEM_PROMPT_WITH_RAG,   # NEW
+        rag_manager: RAGManager = RAGManager(),
+    ):
+        self.client = OpenAI(api_key=api_key_grok, base_url="https://api.x.ai/v1")
+        self.live_system_template = live_system_prompt
+        self.rag_system_template = rag_system_prompt              # NEW
+        self.chat_history: List[Dict[str, str]] = []
+        self.last_used_window: Tuple[int, int] | None = None
+        self.rag_manager = rag_manager
+
+    def reset_chat(self):
+        self.chat_history = []
+        self.last_used_window = None
+
+    def _call_grok_once(self, messages: List[Dict[str, str]]) -> str:
+        resp = self.client.chat.completions.create(
+            model=GROK_MODEL,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=2000,
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+    # ---------- NEW: RAG helpers ----------
+    def _rag_search(self, user_message: str, user_id: str, session_id: Optional[str] = None, *, k: int = 6) -> Dict[str, Any]:
+        """Query RAG for top-k matches, return raw Chroma-shaped result."""
+        try:
+            return self.rag_manager.retrieve_query_results_smart(
+                user_message=user_message,
+                user_id=user_id,
+                k=5, k_initial=32,
+                time_window_sec=None,
+                keyword_boost=1.0,
+                mmr_lambda=0.6
+            )
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _rag_evidence_block(self, rag_res: Dict[str, Any]) -> str:
+        """Format a compact, human-readable RAG evidence section for the system prompt."""
+        if not rag_res or "error" in rag_res:
+            return "[NO RAG EVIDENCE]"
+        ids = (rag_res.get("ids", [[]]) or [[]])[0] or []
+        docs = (rag_res.get("documents", [[]]) or [[]])[0] or []
+        metas = (rag_res.get("metadatas", [[]]) or [[]])[0] or []
+        if not docs:
+            return "[NO RAG EVIDENCE]"
+        lines = []
+        for i, doc in enumerate(docs[:10]):
+            md = metas[i] if i < len(metas) else {}
+            src = md.get("source_primary", "Unknown")
+            ses = md.get("session_id", "—")
+            when = _fmt_ts_local(md.get("start_ts"))
+            snippet = (doc or "").replace("\n", " ").strip()
+            if len(snippet) > 240:
+                snippet = snippet[:239] + "…"
+            lines.append(f"- {snippet}  (src={src}, session={ses}, when={when})")
+        return "\n".join(lines) if lines else "[NO RAG EVIDENCE]"
+
+    # ---------- main entry ----------
+    def ask(
+        self,
+        user_message: str,
+        segments: Dict[str, str],
+        user_id: Optional[str] = None,
+        *,
+        base_window_min: int = 15,
+        expand_step_min: int = 5,
+        max_attempts: int = 3,
+        api_retry_on_error: int = 3,
+        api_retry_sleep_range: Tuple[float, float] = (0.6, 1.4),
+        enable_rag_fallback: bool = True,                 # NEW
+        rag_user_id: Optional[str] = None,                # NEW: whose RAG to search (defaults to same identity as chat)
+        rag_session_hint: Optional[str] = None,           # NEW: optionally bias to a session
+    ) -> Dict[str, Any]:
+
+        segs_int = _coerce_minute_keys(segments)
+        if not segs_int:
+            final = {
+                "answer": "No transcript available yet.",
+                "citations": [],
+                "needs_older_context": False,
+                "attempts": 1,
+                "used_window": [0, 0],
+                "raw": "",
+                "json": None,
+            }
+            self.chat_history += [{"role":"user","content":user_message},{"role":"assistant","content":final["answer"]}]
+            return final
+
+        end_m = max(segs_int.keys())
+        start_m, cur_end_m, window_text = _build_window_text(segments, end_minute=end_m, window_min=base_window_min)
+
+        attempts = 0
+        result_json = None
+        raw_text = ""
+        answer_text = ""
+        needs_older = False
+
+        # ---- Try with live-only window (expanding backwards if needed) ----
+        while attempts < max_attempts:
+            attempts += 1
+            system_prompt = self.live_system_template.replace("{window_transcript_injected}", window_text)
+            messages = _messages_with_system(system_prompt, self.chat_history, user_message)
+
+            api_tries, last_err = 0, None
+            while api_tries < api_retry_on_error:
+                try:
+                    raw_text = self._call_grok_once(messages)
+                    break
+                except Exception as e:
+                    last_err = e
+                    api_tries += 1
+                    time.sleep(random.uniform(*api_retry_sleep_range))
+            if api_tries == api_retry_on_error and last_err is not None:
+                raw_text = '{"answer":"Temporary error contacting model.","citations":[],"needs_older_context":false,"suggested_shift_minutes":0}'
+
+            result_json = _safe_json_parse(raw_text)
+            if not result_json:
+                answer_text = raw_text
+                needs_older = False
+                break
+
+            answer_text = str(result_json.get("answer", "")).strip()
+            needs_older = bool(result_json.get("needs_older_context", False))
+            shift = int(result_json.get("suggested_shift_minutes", 0) or 0)
+
+            if needs_older and start_m > 0:
+                step = shift if shift in (5,10,15,20,25,30) else expand_step_min
+                new_start = max(0, start_m - step)
+                if new_start == start_m:
+                    break
+                start_m = new_start
+                _, _, window_text = _build_window_text(segments, end_minute=end_m, window_min=(end_m - start_m + 1))
+                continue
+            break
+
+        used_live_only = bool(result_json and not needs_older)
+
+        # ---- RAG fallback (only if enabled and live window was insufficient) ----
+        if enable_rag_fallback and (not result_json or needs_older):
+            # Query RAG
+            rag_uid = user_id or "alice"  # <-- replace with your runtime user identity
+            rag_res = self._rag_search(user_message, rag_uid, session_id="", k=6)
+            rag_block = self._rag_evidence_block(rag_res)
+
+            # If nothing in RAG either, keep previous outcome
+            if rag_block and rag_block != "[NO RAG EVIDENCE]":
+                # Build the RAG-aware prompt
+                rag_system = self.rag_system_template \
+                    .replace("{window_transcript_injected}", window_text) \
+                    .replace("{rag_evidence_injected}", rag_block)
+
+                messages = _messages_with_system(rag_system, self.chat_history, user_message)
+                try:
+                    raw_text_rag = self._call_grok_once(messages)
+                except Exception:
+                    raw_text_rag = '{"answer":"Insufficient evidence in current sources.","citations":[],"needs_older_context":true,"suggested_shift_minutes":10}'
+                result_json_rag = _safe_json_parse(raw_text_rag) or {
+                    "answer": raw_text_rag, "citations": [], "needs_older_context": False, "suggested_shift_minutes": 0
+                }
+                # Prefer RAG answer now
+                result_json = result_json_rag
+                answer_text = str(result_json.get("answer", "")).strip()
+                needs_older = bool(result_json.get("needs_older_context", False))
+                raw_text = raw_text_rag
+
+        # Persist only the final turn
+        self.chat_history.append({"role": "user", "content": user_message})
+        self.chat_history.append({"role": "assistant", "content": answer_text})
+        self.last_used_window = (start_m, end_m)
+
+        return {
+            "answer": answer_text,
+            "citations": (result_json.get("citations", []) if isinstance(result_json, dict) else []),
+            "needs_older_context": needs_older,
+            "attempts": attempts,
+            "used_window": [start_m, end_m],
+            "raw": raw_text,
+            "json": result_json,
+            "used_live_only": used_live_only,
+        }
+
 
 def render_references(citations, *, quote_max=160):
     """Return a formatted 'References' block from list[dict|str]."""
@@ -102,148 +304,6 @@ def render_references(citations, *, quote_max=160):
 
     lines.sort(key=sort_key)
     return "\n\nReferences:\n" + "\n".join(lines)
-
-class LiveMeetingChatGrok:
-    """
-    Lightweight, CPU-only live chat:
-      - Injects last 15 minutes of transcript into system prompt
-      - Maintains chat history
-      - Retries on API failure (max_retries)
-      - Expands context window in 5-min steps when model signals older context needed
-    """
-
-    def __init__(self, api_key_grok: str, live_system_prompt: str = LIVE_SYSTEM_PROMPT):
-        self.client = OpenAI(api_key=api_key_grok, base_url="https://api.x.ai/v1")
-        self.live_system_template = live_system_prompt
-        self.chat_history: List[Dict[str, str]] = []  # user/assistant only
-        self.last_used_window: Tuple[int, int] | None = None
-
-    def reset_chat(self):
-        self.chat_history = []
-        self.last_used_window = None
-
-    def _call_grok_once(self, messages: List[Dict[str, str]]) -> str:
-        # Single API attempt (no context expansion). Caller handles retries/backoff.
-        resp = self.client.chat.completions.create(
-            model=GROK_MODEL,
-            messages=messages,
-            temperature=0.2,      # tighter for concrete answers
-            max_tokens=2000,       # live answers should be concise
-        )
-        return (resp.choices[0].message.content or "").strip()
-
-    def ask(
-        self,
-        user_message: str,
-        segments: Dict[str, str],
-        *,
-        base_window_min: int = 15,
-        expand_step_min: int = 5,
-        max_attempts: int = 3,
-        api_retry_on_error: int = 3,
-        api_retry_sleep_range: Tuple[float, float] = (0.6, 1.4),
-    ) -> Dict[str, Any]:
-        """
-        Returns a dict:
-          {
-            "answer": str,
-            "citations": [...],
-            "needs_older_context": bool,
-            "attempts": int,
-            "used_window": [start_min, end_min],
-            "raw": str,                    # raw model text (for debugging)
-            "json": dict | None            # parsed json if any
-          }
-        """
-        # Determine the initial end-minute: latest segment available
-        segs_int = _coerce_minute_keys(segments)
-        if not segs_int:
-            final = {
-                "answer": "No transcript available yet.",
-                "citations": [],
-                "needs_older_context": False,
-                "attempts": 1,
-                "used_window": [0, 0],
-                "raw": "",
-                "json": None,
-            }
-            # store turn
-            self.chat_history.append({"role": "user", "content": user_message})
-            self.chat_history.append({"role": "assistant", "content": final["answer"]})
-            return final
-
-        end_m = max(segs_int.keys())
-        start_m, cur_end_m, window_text = _build_window_text(segments, end_minute=end_m, window_min=base_window_min)
-
-        attempts = 0
-        result_json = None
-        raw_text = ""
-        answer_text = ""
-        needs_older = False
-
-        while attempts < max_attempts:
-            attempts += 1
-
-            system_prompt = self.live_system_template.replace("{window_transcript_injected}", window_text)
-            messages = _messages_with_system(system_prompt, self.chat_history, user_message)
-
-            # transient API errors retry
-            api_tries = 0
-            last_err = None
-            while api_tries < api_retry_on_error:
-                try:
-                    raw_text = self._call_grok_once(messages)
-                    break
-                except Exception as e:
-                    last_err = e
-                    api_tries += 1
-                    time.sleep(random.uniform(*api_retry_sleep_range))
-            if api_tries == api_retry_on_error and last_err is not None:
-                # hard fail for this attempt — if we still have attempts left, loop; else return error text
-                raw_text = f'{{"answer":"Temporary error contacting model.","citations":[],"needs_older_context":false,"suggested_shift_minutes":0}}'
-
-            # Expect strict JSON per prompt; still be defensive
-            result_json = _safe_json_parse(raw_text)
-            if not result_json:
-                # model deviated; coerce minimal result
-                answer_text = raw_text
-                needs_older = False
-                break
-
-            # Extract control signals
-            answer_text = str(result_json.get("answer", "")).strip()
-            needs_older = bool(result_json.get("needs_older_context", False))
-            shift = int(result_json.get("suggested_shift_minutes", 0) or 0)
-
-            # If the model says we need older context, expand window backwards
-            if needs_older and start_m > 0:
-                step = shift if shift in (5, 10, 15, 20, 25, 30) else expand_step_min
-                new_start = max(0, start_m - step)
-                if new_start == start_m:
-                    # can't go further back
-                    break
-                start_m = new_start
-                # rebuild window using the SAME end_m (latest minute), but a larger span
-                _, _, window_text = _build_window_text(segments, end_minute=end_m, window_min=(end_m - start_m + 1))
-                continue
-
-            # Otherwise we’re done
-            break
-
-        # Persist only the final turn in chat history (clean)
-        self.chat_history.append({"role": "user", "content": user_message})
-        self.chat_history.append({"role": "assistant", "content": answer_text})
-        self.last_used_window = (start_m, end_m)
-
-        return {
-            "answer": answer_text,
-            "citations": (result_json.get("citations", []) if result_json else []),
-            "needs_older_context": needs_older,
-            "attempts": attempts,
-            "used_window": [start_m, end_m],
-            "raw": raw_text,
-            "json": result_json,
-        }
 
 
 if __name__ == "__main__":

@@ -1,76 +1,42 @@
-import os
-from openai import OpenAI
-from typing import Dict, List
+import os, json, time, random
+from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
-
-# ============================================================================
-# CONFIGURATION - Now configurable via constructor
-# ============================================================================
-
-# Default values
-DEFAULT_WORDS_PER_ANALYSIS = 200
-DEFAULT_WORDS_PER_ROLLING_SUMMARY = 300
-MAX_PRIOR_SUMMARY_WORDS = 1000
 GROK_MODEL = "grok-4-fast-reasoning"
 
-# ============================================================================
+# ============================
+# STRICT-JSON SYSTEM PROMPTS
+# ============================
 
-# IT-FOCUSED SYSTEM PROMPT
-SYSTEM_PROMPT = """
-You are a Meeting Analyst AI for ONE SPECIFIC MEETING. You must answer using ONLY the following two sources:
-1) Full Meeting Transcript (verbatim, possibly with timestamps/speaker tags)
-2) Final Analysis of Meeting (post-meeting summary)
+SYSTEM_PROMPT_JSON = """
+You are the Meeting Analyst AI for ONE specific meeting.
+Use ONLY the two sources below. Never use outside knowledge.
 
-No other information, assumptions, prior memory, or web knowledge is allowed. If a user asks for anything outside these two sources, say you don't have that context and ask for the relevant passage.
+Return a STRICT JSON object with ONLY these keys:
+{
+  "answer": string,                       // max 6 sentences, concise, actionable
+  "citations": [                          // cite exact evidence lines you used
+    {"minute": int, "speaker": string, "quote": string}
+  ],
+  "needs_older_context": boolean,         // true if not found in these two sources
+  "suggested_shift_minutes": integer,     // choose from: 0, 5, 10, 15, 20, 25, 30 (use 0 normally here)
+  "missing_reason": string,               // <= 20 words; e.g. "not in this meeting’s sources"
+  "follow_up": string                     // optional; one clarifying question if truly needed
+}
 
-YOUR GOALS
-1. ANSWER MEETING QUESTIONS: Decisions, action items, owners, dates, blockers, metrics, rationales, who-said-what, etc.
-2. PRODUCE ANALYSES ON DEMAND: Summaries, risks, recommendations, contradictions, timelines, participant lists.
-3. STAY WITHIN SCOPE: This chat is scoped to this single meeting. Do not import info from other meetings or general knowledge.
-
-CONTEXT & EVIDENCE RULES
-- Retrieve ONLY from the two sources above.
-- Every concrete claim MUST include in-text evidence showing exactly where it came from.
-- Evidence format (use at least one per key claim):
-  • [Transcript 00:12:34 — "short quote…"]  (use timestamp if available; else use line/turn number like [Transcript L123 — "…"])
-  • [Final Analysis §Decisions — "short quote…"]  (use section/heading if available)
-- If the two sources conflict, prefer explicit corrections in the Final Analysis; otherwise, use the Transcript and clearly flag the discrepancy.
-- If the answer cannot be found in these sources, reply exactly: Not in the provided meeting context. Optionally ask for a specific excerpt.
-
-INTERACTION STYLE
-- TEXT-ONLY OUTPUT. No JSON, no code blocks unless quoting text from sources.
-- Be concise but complete; prioritize clarity and actionability.
-- Build iteratively on prior turns in THIS chat; do not repeat unchanged points.
-- PRIORITIZE USER-FLAGGED TOPICS: If the user marks something as important (e.g., "focus on this"), analyze it in extra depth and include the sentence: The user flagged this as important, so extra attention is given.
-- Dates/Times: Use the exact dates/times stated in the sources. Do not infer missing dates.
-
-WHAT YOU CAN DO
-- Summarize the meeting or parts of it.
-- Extract decisions, owners, due dates, risks, open questions, follow-ups.
-- Build a timeline of key moments.
-- Compare Transcript vs Final Analysis to find contradictions or omissions.
-- Answer specific queries like "who decided X" or "what's the due date for Y" strictly from the sources.
-
-WHAT YOU MUST NOT DO
-- No outside knowledge or speculation.
-- No hidden assumptions. If ambiguous, ask a precise clarifying question.
-- Do not fabricate participants, metrics, or dates.
-
-RESPONSE STYLE (TEXT ONLY)
-- Start with the direct answer or summary in 1-3 sentences.
-- Follow with brief supporting details as needed.
-- Include evidence inline after the claims using the formats above.
-- If listing items (e.g., action items), simple bullet points are fine—each bullet must include evidence tags.
-- If nothing relevant exists, reply: Not in the provided meeting context.
-
-FAIL-SAFE BEHAVIOR
-- If sources are missing or incomplete, state what's missing and request the exact excerpt needed (timestamp, line, or section).
-- If asked about unrelated topics, respond: This chat is restricted to the provided meeting's Transcript and Final Analysis.
-
-BELOW IS THE FULL TRANSCRIPT AND FINAL ANALYSIS FOR YOUR REFERENCE.
+Citation rules:
+- Ground EVERY concrete claim with at least one citation.
+- Use speaker labels:
+  • "[Transcript]" when citing the transcript (put the correct minute or line number)
+  • "[Final Analysis]" when citing the analysis
+- If nothing relevant is found in these two sources, set:
+  "answer": "Not in the provided meeting context.",
+  "needs_older_context": true,
+  "suggested_shift_minutes": 0,
+  and briefly set "missing_reason".
 
 FULL TRANSCRIPT:
 {transcript_text_injected}
@@ -79,130 +45,281 @@ FINAL ANALYSIS:
 {final_analysis_injected}
 """
 
+SYSTEM_PROMPT_JSON_WITH_RAG = """
+You are the Meeting Analyst AI for ONE specific meeting.
+Prefer the meeting’s Full Transcript and Final Analysis, but you may consult the RAG Evidence provided for older/related context from the same user/tenant. Never use outside knowledge.
 
+Return a STRICT JSON object with ONLY these keys:
+{
+  "answer": string,                       // max 6 sentences, concise, actionable
+  "citations": [                          // cite exact evidence lines you used
+    {"minute": int, "speaker": string, "quote": string}
+  ],
+  "needs_older_context": boolean,         // true only if even RAG is insufficient
+  "suggested_shift_minutes": integer,     // choose from: 0, 5, 10, 15, 20, 25, 30
+  "missing_reason": string,               // <= 20 words
+  "follow_up": string                     // optional; one clarifying question if truly needed
+}
+
+Citation rules:
+- Prefer Transcript and Final Analysis.
+- If you use RAG, set speaker to "[RAG]" and minute to 0, with a short verbatim quote. Include session/time in the quote if present.
+- Ground EVERY claim with at least one citation. If nothing relevant exists across all sources, set:
+  "answer": "Not in the provided meeting context.",
+  "needs_older_context": true,
+  "suggested_shift_minutes": 10.
+
+FULL TRANSCRIPT:
+{transcript_text_injected}
+
+FINAL ANALYSIS:
+{final_analysis_injected}
+
+RAG EVIDENCE (most relevant first; short excerpts with metadata):
+{rag_evidence_injected}
+"""
+
+# ============================
+# UTILS
+# ============================
+
+def _to_analysis_text(latest_analysis: Any) -> str:
+    if isinstance(latest_analysis, dict):
+        parts = []
+        for key, value in latest_analysis.items():
+            if isinstance(value, list):
+                parts.append(f"{key.replace('_',' ').title()}:\n" + "\n".join(f"- {item}" for item in value))
+            else:
+                parts.append(f"{key.replace('_',' ').title()}: {value}")
+        return "\n\n".join(parts)
+    return (latest_analysis or "").strip()
+
+def _safe_str(s: Optional[str]) -> str:
+    return (s or "").strip()
+
+def _safe_json_parse(s: str) -> Optional[Dict[str, Any]]:
+    try:
+        return json.loads(s)
+    except Exception:
+        return None
+
+def _fmt_ts_local(ts: Optional[float]) -> str:
+    if ts is None: return "—"
+    try:
+        from zoneinfo import ZoneInfo
+        import datetime as _dt
+        return _dt.datetime.fromtimestamp(float(ts), ZoneInfo("Asia/Karachi")).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        import datetime as _dt
+        return _dt.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M:%S")
+
+# ============================
+# RAG
+# ============================
+
+from rag import RAGManager  # assumes your RAGManager is importable
 
 class MeetingChatGrok:
-  def __init__(self, api_key_grok: str, latest_transcript: str, latest_analysis: str, system_prompt: str = SYSTEM_PROMPT):
-    self.client = OpenAI(
-        api_key=api_key_grok,
-        base_url="https://api.x.ai/v1"
-    )
-    
-    
-    # Transcript accumulation
-    self.full_transcript: str = latest_transcript
+    """
+    Final meeting chat with STRICT-JSON responses and RAG fallback:
+      1) Ask using ONLY Full Transcript + Final Analysis.
+      2) If model returns "Not in the provided meeting context." or needs_older_context: true → query RAG and retry.
+      3) Returns JSON-like dict similar to Live chat.
+    """
 
-    # Latest analysis
-    self.latest_analysis: str = latest_analysis
-    
-    self.system_prompt = self._inject_meeting_context(system_prompt)
-    
-    # Meeting metadata
-    self.start_time = datetime.now()
-        
-    self.chat_history: List[Dict[str, str]] = []  # For future chat features
+    def __init__(
+        self,
+        api_key_grok: str,
+        latest_transcript: str,
+        latest_analysis: Any,
+        *,
+        system_prompt_json: str = SYSTEM_PROMPT_JSON,
+        system_prompt_json_with_rag: str = SYSTEM_PROMPT_JSON_WITH_RAG,
+        rag_manager: RAGManager = RAGManager(),
+        rag_user_id: Optional[str] = None,
+        rag_session_hint: Optional[str] = None,
+    ):
+        self.client = OpenAI(api_key=api_key_grok, base_url="https://api.x.ai/v1")
 
-  def _inject_meeting_context(self, system_prompt: str) -> str:
-      transcript = (self.full_transcript or "").strip()
-      # Handle both string and dict analysis
-      if isinstance(self.latest_analysis, dict):
-          # Convert dict to formatted string
-          analysis_parts = []
-          for key, value in self.latest_analysis.items():
-              if isinstance(value, list):
-                  analysis_parts.append(f"{key.replace('_', ' ').title()}:\n" + "\n".join(f"- {item}" for item in value))
-              else:
-                  analysis_parts.append(f"{key.replace('_', ' ').title()}: {value}")
-          analysis = "\n\n".join(analysis_parts)
-      else:
-          analysis = (self.latest_analysis or "").strip()
+        # Sources
+        self.full_transcript: str = _safe_str(latest_transcript)
+        self.latest_analysis_text: str = _to_analysis_text(latest_analysis)
 
-      template = system_prompt or ""
-      injected = template
+        # Prompts
+        self._base_system_prompt_template = system_prompt_json
+        self._rag_system_prompt_template  = system_prompt_json_with_rag
+        self.system_prompt = self._build_system_prompt()
 
-      # Detect placeholders
-      has_transcript_token = "{transcript_text_injected}" in template
-      has_analysis_token = "{final_analysis_injected}" in template
+        # RAG
+        self.rag_manager = rag_manager or RAGManager()
+        self.rag_user_id = rag_user_id or "default_user"
+        self.rag_session_hint = rag_session_hint
 
-      # Replace placeholders if present
-      if has_transcript_token:
-          injected = injected.replace(
-              "{transcript_text_injected}",
-              transcript if transcript else "[NO TRANSCRIPT PROVIDED]"
-          )
-      if has_analysis_token:
-          injected = injected.replace(
-              "{final_analysis_injected}",
-              analysis if analysis else "[NO FINAL ANALYSIS PROVIDED]"
-          )
+        # Chat state
+        self.chat_history: List[Dict[str, str]] = []
+        self.start_time = datetime.now()
 
-      # If a token was missing, append that section
-      append_parts = []
-      if not has_transcript_token:
-          append_parts.append(
-              "\n\nFULL TRANSCRIPT:\n" + (transcript if transcript else "[NO TRANSCRIPT PROVIDED]")
-          )
-      if not has_analysis_token:
-          append_parts.append(
-              "\n\nFINAL ANALYSIS:\n" + (analysis if analysis else "[NO FINAL ANALYSIS PROVIDED]")
-          )
+    # ----- prompt builders -----
+    def _build_system_prompt(self) -> str:
+        sp = self._base_system_prompt_template
+        sp = sp.replace("{transcript_text_injected}", self.full_transcript if self.full_transcript else "[NO TRANSCRIPT PROVIDED]")
+        sp = sp.replace("{final_analysis_injected}", self.latest_analysis_text if self.latest_analysis_text else "[NO FINAL ANALYSIS PROVIDED]")
+        return sp
 
-      if append_parts:
-          injected = f"{injected.rstrip()}{''.join(append_parts)}"
+    def _build_system_prompt_with_rag(self, rag_block: str) -> str:
+        sp = self._rag_system_prompt_template
+        sp = sp.replace("{transcript_text_injected}", self.full_transcript if self.full_transcript else "[NO TRANSCRIPT PROVIDED]")
+        sp = sp.replace("{final_analysis_injected}", self.latest_analysis_text if self.latest_analysis_text else "[NO FINAL ANALYSIS PROVIDED]")
+        sp = sp.replace("{rag_evidence_injected}", rag_block if rag_block.strip() else "[NO RAG EVIDENCE]")
+        return sp
 
-      # Persist and return
-      return injected
-
-  def send_chat(self, user_message: str) -> str:
-    # Ensure a sane history container: a flat list of {"role","content"} dicts
-    if not hasattr(self, "chat_history") or self.chat_history is None:
-        self.chat_history = []
-
-    # Build the message list to send: [system] + history + new user turn
-    messages = []
-    if self.system_prompt:  # add once per request; don't store it in chat_history
-        messages.append({"role": "system", "content": self.system_prompt})
-
-    # Append prior turns (user/assistant)
-    messages.extend(self.chat_history)
-
-    # Append the new user turn
-    messages.append({"role": "user", "content": user_message})
-
-    try:
-        response = self.client.chat.completions.create(
+    # ----- model call -----
+    def _call_once(self, messages: List[Dict[str, str]], temperature: float = 0.2, max_tokens: int = 1200) -> str:
+        resp = self.client.chat.completions.create(
             model=GROK_MODEL,
             messages=messages,
-            temperature=0.5,
-            max_tokens=2000,  # More tokens for comprehensive
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
-        assistant_text = response.choices[0].message.content or ""
-        
-        # Persist the new turn to history (store only user & assistant roles)
-        self.chat_history.append({"role": "user", "content": user_message})
-        self.chat_history.append({"role": "assistant", "content": assistant_text})
-        
-        return assistant_text
-        
-    except Exception as e:
-        print(f"Error communicating with Grok API: {e}")
-        error_message = f"I'm sorry, I encountered an error while processing your request: {str(e)}"
-        
-        # Still add to history for context
-        self.chat_history.append({"role": "user", "content": user_message})
-        self.chat_history.append({"role": "assistant", "content": error_message})
-        
-        return error_message
+        return (resp.choices[0].message.content or "").strip()
 
-  def chat(self, user_message: str) -> str:
-    """Alias for send_chat method for compatibility."""
-    return self.send_chat(user_message)
+    # ----- RAG helpers -----
+    def _rag_search(self, user_message: str, *, k: int = 6) -> Dict[str, Any]:
+        try:
+            return self.rag_manager.retrieve_query_results_smart(
+                user_message=user_message,
+                user_id=self.rag_user_id,
+                k=5, k_initial=32,
+                time_window_sec=None,
+                keyword_boost=1.0,
+                mmr_lambda=0.6
+            )
+        except Exception as e:
+            return {"error": str(e)}
 
-  def reset_chat(self, transcript: str = "", analysis: str = "", system_prompt: str = SYSTEM_PROMPT):
-    self.chat_history = []
-    self.full_transcript = transcript
-    self.latest_analysis = analysis
-    self.system_prompt = self._inject_meeting_context(system_prompt)
+    def _rag_evidence_block(self, rag_res: Dict[str, Any]) -> str:
+        if not rag_res or "error" in rag_res:
+            return "[NO RAG EVIDENCE]"
+        docs = (rag_res.get("documents", [[]]) or [[]])[0] or []
+        metas = (rag_res.get("metadatas", [[]]) or [[]])[0] or []
+        if not docs:
+            return "[NO RAG EVIDENCE]"
+        lines = []
+        for i, doc in enumerate(docs[:10]):
+            md = metas[i] if i < len(metas) else {}
+            ses = md.get("session_id", "—")
+            when = _fmt_ts_local(md.get("start_ts"))
+            snip = (doc or "").replace("\n", " ").strip()
+            if len(snip) > 240: snip = snip[:239] + "…"
+            lines.append(f"- {snip}  (session={ses}, when={when})")
+        return "\n".join(lines) if lines else "[NO RAG EVIDENCE]"
+
+    # ----- public API (JSON-like, live-chat style) -----
+    def ask(
+        self,
+        user_message: str,
+        *,
+        max_attempts: int = 1,
+        api_retry_on_error: int = 3,
+        api_retry_sleep_range: Tuple[float, float] = (0.6, 1.2),
+        enable_rag_fallback: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Returns:
+          {
+            "answer": str,
+            "citations": list[dict],
+            "needs_older_context": bool,
+            "attempts": int,
+            "used_rag": bool,
+            "raw": str,
+            "json": dict | None
+          }
+        """
+        attempts = 0
+        used_rag = False
+        result_json = None
+        raw_text = ""
+        answer = ""
+        needs_older = False
+
+        # First pass: Transcript + Final Analysis only
+        messages = [{"role": "system", "content": self.system_prompt}] + self.chat_history + [{"role": "user", "content": user_message}]
+        while attempts < max_attempts:
+            attempts += 1
+            tries, last_err = 0, None
+            while tries < api_retry_on_error:
+                try:
+                    raw_text = self._call_once(messages, temperature=0.2, max_tokens=1200)
+                    break
+                except Exception as e:
+                    last_err = e
+                    tries += 1
+                    time.sleep(random.uniform(*api_retry_sleep_range))
+            if tries == api_retry_on_error and last_err is not None:
+                raw_text = '{"answer":"Temporary error contacting model.","citations":[],"needs_older_context":false,"suggested_shift_minutes":0}'
+
+            result_json = _safe_json_parse(raw_text)
+            if result_json:
+                answer = (result_json.get("answer") or "").strip()
+                needs_older = bool(result_json.get("needs_older_context", False))
+            else:
+                # Model deviated; treat as plain text answer (no fallback trigger unless explicitly says not found)
+                answer = raw_text.strip()
+                needs_older = answer.lower().startswith("not in the provided meeting context")
+            break  # one attempt is enough for this pass
+
+        # Decide RAG fallback
+        trigger_fallback = enable_rag_fallback and (
+            needs_older or (answer.strip().lower().startswith("not in the provided meeting context"))
+        )
+
+        if trigger_fallback:
+            rag_res = self._rag_search(user_message, k=6)
+            rag_block = self._rag_evidence_block(rag_res)
+            if rag_block and rag_block != "[NO RAG EVIDENCE]":
+                used_rag = True
+                rag_prompt = self._build_system_prompt_with_rag(rag_block)
+                messages_rag = [{"role": "system", "content": rag_prompt}] + self.chat_history + [{"role":"user","content": user_message}]
+                try:
+                    raw_text = self._call_once(messages_rag, temperature=0.25, max_tokens=1200)
+                except Exception:
+                    raw_text = '{"answer":"Not in the provided meeting context.","citations":[],"needs_older_context":true,"suggested_shift_minutes":10}'
+                result_json = _safe_json_parse(raw_text) or {
+                    "answer": raw_text, "citations": [], "needs_older_context": False, "suggested_shift_minutes": 0
+                }
+                answer = (result_json.get("answer") or "").strip()
+                needs_older = bool(result_json.get("needs_older_context", False))
+
+        # Persist the final turn (text only for history)
+        self.chat_history.append({"role": "user", "content": user_message})
+        self.chat_history.append({"role": "assistant", "content": answer})
+
+        return {
+            "answer": answer,
+            "citations": (result_json.get("citations", []) if isinstance(result_json, dict) else []),
+            "needs_older_context": needs_older,
+            "attempts": attempts,
+            "used_rag": used_rag,
+            "raw": raw_text,
+            "json": result_json,
+        }
+
+    # Back-compat: return just the answer text
+    def send_chat(self, user_message: str, **kwargs) -> str:
+        out = self.ask(user_message, **kwargs)
+        return out.get("answer", "")
+
+    def chat(self, user_message: str, **kwargs) -> str:
+        return self.send_chat(user_message, **kwargs)
+
+    def reset_chat(self, transcript: str = "", analysis: Any = "", user_id: str = "", system_prompt_json: str = SYSTEM_PROMPT_JSON):
+        self.chat_history = []
+        self.full_transcript = _safe_str(transcript)
+        self.latest_analysis_text = _to_analysis_text(analysis)
+        self._base_system_prompt_template = system_prompt_json
+        self.system_prompt = self._build_system_prompt()
+        self.rag_user_id = user_id or self.rag_user_id
 
   
 if __name__ == "__main__":
