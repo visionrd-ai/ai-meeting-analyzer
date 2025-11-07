@@ -793,9 +793,7 @@ def start_perfect_ai_recording(
         }
     
     try:
-        # Clear previous session
-        clear_storage()
-        
+        # Don't clear storage - accumulate data until user clicks clear button
         # Set perfect AI configuration
         app_state['analysis_mode'] = mode
         app_state['words_threshold'] = words_threshold
@@ -947,49 +945,107 @@ def stop_perfect_ai_recording():
             except Exception as e:
                 print(f"Error finalizing session: {e}")
         
-        app_state['is_analyzing'] = True
-        app_state['analysis_start_time'] = datetime.now()
-        
         # Emit perfect AI recording stopped
         socketio.emit('perfect_recording_stopped', {
             'timestamp': datetime.now().strftime("%H:%M:%S")
         })
         
-        # Emit perfect AI final analysis start
-        socketio.emit('perfect_final_analysis_start', {
-            'timestamp': datetime.now().strftime("%H:%M:%S")
-        })
-        
         time.sleep(2)  # Allow final processing
         segments = load_transcripts()
+        
+        # Check if we have transcripts BEFORE starting analysis
         if len(segments) == 0:
             app_state['is_recording'] = False
             app_state['is_analyzing'] = False
+            socketio.emit('perfect_analysis_error', {
+                'timestamp': datetime.now().strftime("%H:%M:%S"),
+                'message': 'No transcripts found. Please speak during recording.'
+            })
             return {
                 "success": False, 
                 "message": "⚠️ No transcripts found! Please ensure you spoke during the recording."
             }
         
+        # Only set analyzing state if we have transcripts
+        print(f"✅ Found {len(segments)} transcript segments, starting analysis...")
+        app_state['is_analyzing'] = True
+        app_state['analysis_start_time'] = datetime.now()
+        
+        # Emit perfect AI final analysis start
+        socketio.emit('perfect_final_analysis_start', {
+            'timestamp': datetime.now().strftime("%H:%M:%S"),
+            'segment_count': len(segments)
+        })
+        
+        # Capture user_id before starting background thread
+        user_id = current_user.id if current_user and hasattr(current_user, 'id') else None
+        session_id = app_state.get('current_session_id')
+        
         # Generate perfect AI final analysis with speaker diarization
         def generate_perfect_ai_final_analysis():
             try:
+                print(f"🎯 Starting final analysis with {len(segments)} segments...")
                 xai_key = os.getenv("XAI_API_KEY")
+                if not xai_key:
+                    print("⚠️ No XAI_API_KEY found")
+                    socketio.emit('perfect_analysis_error', {
+                        'timestamp': datetime.now().strftime("%H:%M:%S"),
+                        'message': 'API key not configured'
+                    })
+                    return
+                
                 if xai_key:
+                    print("📝 Creating summarizer and processing transcripts...")
+                    socketio.emit('analysis_progress', {
+                        'stage': 'processing',
+                        'message': 'Processing transcripts...',
+                        'progress': 10
+                    })
+                    
                     fresh_summarizer = MeetingSummarizer(xai_key)
-                    for segment in segments:
+                    
+                    for i, segment in enumerate(segments):
                         fresh_summarizer.add_transcript(segment, auto_analyze=False)
+                        if (i + 1) % 10 == 0:
+                            progress = 10 + int((i + 1) / len(segments) * 30)
+                            print(f"   Processed {i + 1}/{len(segments)} segments...")
+                            socketio.emit('analysis_progress', {
+                                'stage': 'processing',
+                                'message': f'Processing transcripts... {i + 1}/{len(segments)}',
+                                'progress': progress
+                            })
+                    
+                    print("🤖 Generating AI summary...")
+                    socketio.emit('analysis_progress', {
+                        'stage': 'analyzing',
+                        'message': 'Generating AI insights...',
+                        'progress': 50
+                    })
                     
                     app_state['final_summary'] = fresh_summarizer.get_final_summary()
+                    print(f"✅ Summary generated: {len(str(app_state['final_summary']))} characters")
+                    
+                    socketio.emit('analysis_progress', {
+                        'stage': 'finalizing',
+                        'message': 'Finalizing analysis...',
+                        'progress': 80
+                    })
+                    
                     full_transcript = " ".join(segments)
                     full_transcript_rag = build_segments_from_double_space_transcript("  ".join(segments))
-                    ragManager.create_embeddings_from_segments(
-                        user_id=current_user.id,
-                        session_id=app_state['current_session_id'],
-                        segments=full_transcript_rag,
-                        chunk_token_budget=50,
-                        sentence_overlap=2,
-                        max_gap_seconds=1,
-                    )
+                    
+                    # Only create embeddings if we have a valid user_id
+                    if user_id and session_id:
+                        ragManager.create_embeddings_from_segments(
+                            user_id=user_id,
+                            session_id=session_id,
+                            segments=full_transcript_rag,
+                            chunk_token_budget=50,
+                            sentence_overlap=2,
+                            max_gap_seconds=1,
+                        )
+                    else:
+                        print("⚠️ Skipping RAG embeddings - no user_id or session_id available")
 
  
                     # Process speaker diarization if AssemblyAI is available
@@ -1046,14 +1102,16 @@ def stop_perfect_ai_recording():
                         print(f"⚠️ Speaker diarization error: {diarization_error}")
                         # Don't fail the entire process if diarization fails
                     
-                    # Initialize perfect AI chat
-                    if app_state['first_recording_done']:
-                        if not app_state['chat_instance']:
-                            app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'], rag_user_id=current_user.id)
-                        else:
-                            app_state['chat_instance'].reset_chat(full_transcript, app_state['final_summary'], user_id=current_user.id)
+                    # Initialize perfect AI chat - always create/update for Final Chat
+                    if not app_state['chat_instance']:
+                        print("🤖 Creating new Final Chat instance...")
+                        app_state['chat_instance'] = MeetingChatGrok(xai_key, full_transcript, app_state['final_summary'], rag_user_id=user_id)
                     else:
-                        app_state['first_recording_done'] = True
+                        print("🤖 Updating existing Final Chat instance...")
+                        app_state['chat_instance'].reset_chat(full_transcript, app_state['final_summary'], user_id=user_id)
+                    
+                    app_state['first_recording_done'] = True
+                    print("✅ Final Chat is ready!")
                     
                     print("✅ Perfect AI final summary generated")
                     
@@ -1062,14 +1120,20 @@ def stop_perfect_ai_recording():
                         try:
                             # Use application context for database operations from background thread
                             with app.app_context():
-                                session_id = app_state['current_session_id']
-                                print(f"🔍 Saving final analysis for session ID: {session_id}")
+                                db_session_id = app_state['current_session_id']
+                                print(f"🔍 Saving final analysis for session ID: {db_session_id}")
                                 
-                                session = RecordingSession.query.get(session_id)
+                                session = RecordingSession.query.get(db_session_id)
                                 if session:
                                     print(f"✅ Found session for final analysis: {session.session_id}")
                                     
                                     import json
+                                    
+                                    # Save complete transcript
+                                    session.transcript_text = full_transcript
+                                    print(f"📝 Saved complete transcript: {len(full_transcript)} characters")
+                                    
+                                    # Save final analysis
                                     session.final_analysis = json.dumps(app_state['final_summary'])
                                     session.analysis_generated_at = datetime.utcnow()
                                     session.analysis_word_count = len(full_transcript.split())
@@ -1081,16 +1145,27 @@ def stop_perfect_ai_recording():
                                         duration = (session.ended_at - session.started_at).total_seconds()
                                         session.duration_seconds = int(duration)
                                     
+                                    # Update word and segment counts
+                                    session.total_words = len(full_transcript.split())
+                                    session.total_segments = len(segments)
+                                    
                                     db.session.commit()
-                                    print("✅ Final analysis saved to database")
+                                    print(f"✅ Final analysis and transcript saved to database")
+                                    print(f"   Words: {session.total_words}, Segments: {session.total_segments}, Duration: {session.duration_seconds}s")
                                 else:
-                                    print(f"❌ Session not found for final analysis with ID: {session_id}")
+                                    print(f"❌ Session not found for final analysis with ID: {db_session_id}")
                         except Exception as db_error:
                             print(f"❌ Database save error for final analysis: {db_error}")
                             import traceback
                             traceback.print_exc()
                     
                     app_state['chat_locked'] = False
+                    
+                    # Verify chat instance is ready
+                    if app_state.get('chat_instance'):
+                        print("✅ Final Chat instance verified and ready")
+                    else:
+                        print("⚠️ Warning: Final Chat instance not created")
                     
                     # Emit perfect AI final analysis complete
                     socketio.emit('perfect_final_analysis_complete', {
@@ -1099,14 +1174,18 @@ def stop_perfect_ai_recording():
                         'timestamp': datetime.now().strftime("%H:%M:%S"),
                         'perfect_ai_quality_score': 95,
                         'refresh_transcript_page': True,  # Signal to refresh page 2
-                        'speaker_diarization': speaker_diarization_result
+                        'speaker_diarization': speaker_diarization_result,
+                        'chat_ready': app_state.get('chat_instance') is not None
                     })
                     
                     # Emit perfect AI chat unlock
                     socketio.emit('perfect_chat_unlocked', {
                         'timestamp': datetime.now().strftime("%H:%M:%S"),
-                        'message': 'Perfect AI Chat is now available! Ask me about your meeting.'
+                        'message': 'Perfect AI Chat is now available! Ask me about your meeting.',
+                        'chat_ready': True
                     })
+                    
+                    print("🎉 Final Chat unlocked and ready for questions!")
                 else:
                     print("⚠️ No API key for perfect AI final summary")
             except Exception as e:
@@ -1422,15 +1501,10 @@ def index():
 @app.route('/transcript')
 @login_required
 def transcript():
-    """Perfect AI Live Transcript - Fresh Start Only."""
-    # Clear old data when accessing Live Transcript page
-    if not app_state['is_recording']:
-        clear_storage()
-        app_state['transcript_segments'] = []
-        reset_speaker_detection()
-    
-    # Use fresh metrics (no old data)
-    metrics = calculate_fresh_metrics()
+    """Perfect AI Live Transcript - Accumulate until clear."""
+    # Don't clear data - keep accumulating transcripts until user clicks clear
+    # Calculate metrics from existing data
+    metrics = calculate_perfect_ai_metrics()
     
     status_text = "READY FOR PERFECT AI RECORDING"
     status_color = "#10B981"
@@ -1458,16 +1532,10 @@ def transcript():
 @app.route('/analysis')
 @login_required
 def analysis():
-    """Perfect AI Analysis - Fresh Start Only."""
-    # Clear old data when accessing AI Analysis page
-    if not app_state['is_recording']:
-        clear_storage()
-        app_state['current_analysis'] = None
-        app_state['final_summary'] = None
-        app_state['transcript_segments'] = []
-    
-    # Use fresh metrics (no old data)
-    metrics = calculate_fresh_metrics()
+    """Perfect AI Analysis - Accumulate until clear."""
+    # Don't clear data - keep accumulating analysis until user clicks clear
+    # Calculate metrics from existing data
+    metrics = calculate_perfect_ai_metrics()
     
     status_text = "READY FOR PERFECT AI RECORDING"
     status_color = "#10B981"
@@ -1867,43 +1935,83 @@ def chat_with_ai():
                 'error': 'Message is required'
             })
         
-        # Check if chat instance is available
-        if not app_state.get('chat_instance') and not (app_state['is_recording'] or app_state['is_analyzing']):
+        # Check if any chat instance is available
+        # Live Chat: available during recording/analyzing
+        # Final Chat: available after recording completes
+        has_live_chat = app_state.get('live_chat_instance') and (app_state.get('is_recording') or app_state.get('is_analyzing'))
+        has_final_chat = app_state.get('chat_instance') and not app_state.get('is_recording') and not app_state.get('is_analyzing')
+        
+        if not has_live_chat and not has_final_chat:
             return jsonify({
                 'success': False,
-                'error': 'Chat is not available yet. Please wait for the recording to complete.'
+                'error': 'Chat is not available yet. Please start or complete a recording first.'
             })
         
         
         # Get response from chat instance
         try:
             # Use live chat instance if recording or analyzing
-            if app.state['is_recording'] or app.state['is_analyzing']:
+            if app_state.get('is_recording') or app_state.get('is_analyzing'):
+                # Live Chat during recording
                 if not app_state.get('live_chat_instance'):
-                    raise Exception("Live chat instance not initialized")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Live chat is not available yet. Please wait for recording to initialize.'
+                    })
                 
-                if not app_state['recording_file_path'] or not os.path.exists(app_state['recording_file_path']):
-                    raise Exception("Recording file not available for live chat")
+                if not app_state.get('recording_file_path') or not os.path.exists(app_state['recording_file_path']):
+                    return jsonify({
+                        'success': False,
+                        'error': 'Recording file not available for live chat.'
+                    })
                 
-                segments =read_minute_segments_snapshot(
+                # Read segments for live chat context
+                segments = read_minute_segments_snapshot(
                     app_state['recording_file_path'], 
                     include_empty_minutes=True,
                     max_bytes=MAX_BYTES_TO_READ
                 )
+                
                 result = app_state['live_chat_instance'].ask(message, segments=segments, user_id=current_user.id)
                 response = result['answer']
+                
                 if APPEND_CITATIONS:
                     response += render_references(result.get('references', []))
-            # Use standard chat instance otherwise 
+                
+                return jsonify({
+                    'success': True,
+                    'response': response,
+                    'timestamp': datetime.now().strftime("%H:%M:%S"),
+                    'chat_type': 'live'
+                })
+            
+            # Use Final Chat instance after recording completes
             else:
+                if not app_state.get('chat_instance'):
+                    print("⚠️ Final Chat instance not found")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Final chat is not available yet. Please complete a recording first.'
+                    })
+                
+                print(f"💬 Final Chat processing message: {message[:50]}...")
+                
+                # Final Chat with full context (built in stop_recording)
                 response = app_state['chat_instance'].chat(message)
-            return jsonify({
-                'success': True,
-                'response': response,
-                'timestamp': datetime.now().strftime("%H:%M:%S")
-            })
+                
+                print(f"✅ Final Chat response generated: {len(response)} characters")
+                
+                return jsonify({
+                    'success': True,
+                    'response': response,
+                    'timestamp': datetime.now().strftime("%H:%M:%S"),
+                    'chat_type': 'final'
+                })
+                
         except Exception as chat_error:
             print(f"Chat error: {chat_error}")
+            import traceback
+            traceback.print_exc()
             return jsonify({
                 'success': False,
                 'error': 'Sorry, I encountered an error processing your message. Please try again.'

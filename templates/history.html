@@ -602,10 +602,6 @@
                 <div class="stat-value">{{ stats.total_duration }}</div>
                 <div class="stat-label">Total Duration</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.total_recordings }}</div>
-                <div class="stat-label">Audio Files</div>
-            </div>
         </div>
 
         <!-- Sessions List -->
@@ -637,7 +633,6 @@
                             <div class="session-meta">
                                 <span>📅 {{ session.started_at[:10] if session.started_at else 'Unknown date' }}</span>
                                 <span>⏱️ {{ session.duration_formatted }}</span>
-                                <span>🎤 {{ session.audio_source.title() }}</span>
                                 <span>🤖 {{ session.transcription_engine.replace('_', ' ').title() }}</span>
                             </div>
                             <div class="session-stats">
@@ -648,9 +643,6 @@
                                 {% endif %}
                                 {% if session.has_speaker_diarization %}
                                 <span class="stat-badge" style="background: var(--perfect-ai); color: white;">🎙️ {{ session.speaker_count }} speakers</span>
-                                {% endif %}
-                                {% if session.recording_count > 0 %}
-                                <span class="stat-badge" style="background: var(--accent); color: white;">🎵 {{ session.recording_count }} files</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -669,11 +661,6 @@
                             <button class="action-btn" style="background: var(--perfect-ai); color: white;" onclick="viewSpeakerDiarization('{{ session.session_id }}')">
                                 🎙️ View Speakers
                             </button>
-                            {% endif %}
-                            {% if session.recording_count > 0 %}
-                            <a href="{{ url_for('download_session_recordings', session_id=session.session_id) }}" class="action-btn secondary">
-                                📥 Download Audio
-                            </a>
                             {% endif %}
                         </div>
                     </div>

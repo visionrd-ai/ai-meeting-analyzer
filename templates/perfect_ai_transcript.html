@@ -457,34 +457,7 @@
             background: #fffbeb;
         }
 
-        .speaker-tag {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
 
-        .speaker-tag.speaker-1 {
-            background: #dc2626;
-            color: white;
-        }
-
-        .speaker-tag.speaker-2 {
-            background: #2563eb;
-            color: white;
-        }
-
-        .speaker-tag.speaker-3 {
-            background: #059669;
-            color: white;
-        }
-
-        .speaker-tag.speaker-4 {
-            background: #d97706;
-            color: white;
-        }
 
         .word-cloud {
             display: flex;
@@ -667,7 +640,6 @@
                         <button class="control-btn" onclick="clearTranscript()">🗑️ Clear</button>
                         <button class="control-btn" onclick="exportTranscript()">📄 Export</button>
                         <button class="control-btn" onclick="toggleAutoScroll()" id="auto-scroll-btn">📜 Auto-scroll</button>
-                        <button class="control-btn" onclick="showSpeakerManager()">👥 Speakers</button>
                     </div>
                 </div>
                 <div class="transcript-content" id="transcript-content">
@@ -746,22 +718,6 @@
                     </div>
                 </div>
 
-                <!-- Speaker Diarization -->
-                <div class="sidebar-card" id="speaker-diarization-card" style="display: none;">
-                    <h4>🎙️ Speaker Analysis</h4>
-                    <div id="speaker-diarization-content">
-                        <div class="speaker-diarization-status" id="diarization-status">
-                            <div class="diarization-processing">
-                                <div class="spinner-small"></div>
-                                <span>Processing speakers...</span>
-                            </div>
-                        </div>
-                        <div class="speaker-stats" id="speaker-stats" style="display: none;">
-                            <!-- Speaker statistics will be populated here -->
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Key Topics -->
                 <div class="sidebar-card">
                     <h4>🏷️ Key Topics</h4>
@@ -788,56 +744,6 @@
                         </div>
                         <div>
                             <strong>Quality:</strong> Maximum
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Speaker Management Modal -->
-    <div class="modal" id="speakerManagerModal" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3>👥 Speaker Management</h3>
-                <button class="modal-close" onclick="closeSpeakerManager()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="speaker-manager">
-                    <div class="speaker-info-section">
-                        <h4>Speaker Information</h4>
-                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-                            The system automatically assigns speakers as "Speaker 1", "Speaker 2", "Speaker 3", etc. 
-                            based on conversation patterns and timing.
-                        </p>
-                        
-                        <div class="speaker-colors">
-                            <h5>Speaker Color Coding:</h5>
-                            <div style="display: grid; gap: 0.5rem; margin-top: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div style="width: 20px; height: 20px; background: #dc2626; border-radius: 4px;"></div>
-                                    <span>Speaker 1</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div style="width: 20px; height: 20px; background: #2563eb; border-radius: 4px;"></div>
-                                    <span>Speaker 2</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div style="width: 20px; height: 20px; background: #059669; border-radius: 4px;"></div>
-                                    <span>Speaker 3</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div style="width: 20px; height: 20px; background: #d97706; border-radius: 4px;"></div>
-                                    <span>Speaker 4</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="current-session-speakers" style="margin-top: 1.5rem;">
-                            <h5>Current Session Speakers:</h5>
-                            <div id="sessionSpeakersList">
-                                <p style="color: var(--text-secondary); font-style: italic;">Start recording to see speakers</p>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -916,45 +822,23 @@
             });
 
             socket.on('perfect_final_analysis_complete', function(data) {
-                console.log('🎯 Perfect AI final analysis complete - refreshing transcript page');
+                console.log('🎯 Perfect AI final analysis complete');
                 
                 // Handle speaker diarization if available
                 if (data.speaker_diarization && data.speaker_diarization.success) {
                     displaySpeakerDiarization(data.speaker_diarization);
                 }
                 
-                // Always refresh when analysis is complete to show updated data
-                showRefreshNotification();
-                
-                // Refresh the page after a short delay
-                setTimeout(function() {
-                    window.location.reload();
-                }, 2000);
+                // Don't auto-refresh - keep accumulating transcripts
+                console.log('✅ Transcripts kept on page (not refreshing)');
             });
 
-            socket.on('speaker_diarization_start', function(data) {
-                console.log('🎙️ Speaker diarization started');
-                showSpeakerDiarizationCard();
-                updateDiarizationStatus('Processing speakers...', true);
-            });
 
-            socket.on('speaker_diarization_complete', function(data) {
-                console.log('🎙️ Speaker diarization completed:', data);
-                if (data.result && data.result.success) {
-                    displaySpeakerDiarization(data.result);
-                } else {
-                    updateDiarizationStatus('Speaker analysis failed', false);
-                }
-            });
             
             socket.on('perfect_analysis_update', function(data) {
                 console.log('🎯 Perfect AI analysis update received');
-                // Auto-refresh to show latest analysis
-                if (data.should_refresh) {
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 1000);
-                }
+                // Don't auto-refresh - keep accumulating data
+                console.log('✅ Data kept on page (not refreshing)');
             });
             
             socket.on('auth_required', function(data) {
@@ -1245,13 +1129,6 @@
             const sourceIcon = data.source_label === 'Mic' ? '🎤' : '🔊';
             const sourceColor = data.source_label === 'Mic' ? 'var(--perfect-ai)' : 'var(--accent)';
             
-            // Create speaker tag if speaker information is available
-            let speakerTag = '';
-            if (data.speaker) {
-                const speakerNum = data.speaker.replace('Speaker ', '');
-                speakerTag = `<div class="speaker-tag speaker-${speakerNum}">${data.speaker}</div>`;
-            }
-            
             segment.innerHTML = `
                 <div class="segment-header">
                     <div class="segment-source" style="background: ${sourceColor}20; color: ${sourceColor};">
@@ -1260,7 +1137,6 @@
                     </div>
                     <div class="segment-timestamp">${data.timestamp}</div>
                 </div>
-                ${speakerTag}
                 <div class="segment-text">${data.new_text}</div>
             `;
             
@@ -1276,12 +1152,6 @@
             
             // Update key topics
             updateKeyTopics(data.full_text);
-            
-            // Update speaker diarization display if speaker info is available
-            if (data.speaker) {
-                updateSpeakerDisplay(data);
-                updateSessionSpeakers();
-            }
         }
 
         function updateMetrics(data) {
@@ -1457,58 +1327,6 @@
                     setTimeout(() => notification.remove(), 500);
                 }
             }, 12000);
-        }
-
-        // Speaker Management Functions
-        function showSpeakerManager() {
-            const modal = document.getElementById('speakerManagerModal');
-            modal.style.display = 'flex';
-            loadCurrentSpeakers();
-        }
-
-        function closeSpeakerManager() {
-            const modal = document.getElementById('speakerManagerModal');
-            modal.style.display = 'none';
-        }
-
-        function loadCurrentSpeakers() {
-            // Update session speakers display
-            updateSessionSpeakers();
-        }
-
-        function updateSessionSpeakers() {
-            const container = document.getElementById('sessionSpeakersList');
-            
-            // Count speakers from current transcript segments
-            const speakerCounts = {};
-            transcriptSegments.forEach(segment => {
-                if (segment.speaker) {
-                    if (!speakerCounts[segment.speaker]) {
-                        speakerCounts[segment.speaker] = 0;
-                    }
-                    speakerCounts[segment.speaker]++;
-                }
-            });
-            
-            if (Object.keys(speakerCounts).length === 0) {
-                container.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">Start recording to see speakers</p>';
-                return;
-            }
-            
-            let html = '';
-            Object.entries(speakerCounts).forEach(([speaker, count]) => {
-                const speakerNum = speaker.replace('Speaker ', '');
-                const color = getSpeakerColor(speakerNum);
-                
-                html += `
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <div style="width: 16px; height: 16px; background: ${color}; border-radius: 4px;"></div>
-                        <span><strong>${speaker}</strong>: ${count} segments</span>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
         }
 
         // Initialize on page load

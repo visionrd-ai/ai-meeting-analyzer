@@ -827,6 +827,9 @@
             <a href="/analysis" class="nav-link current">
                 🤖 AI Analysis
             </a>
+            <a href="/history" class="nav-link">
+                📚 History
+            </a>
         </div>
 
         <!-- Analyzing Indicator -->
@@ -850,9 +853,6 @@
                 <div class="analysis-card">
                     <div class="analysis-header">
                         <h3>🎯 Key Points</h3>
-                        <div class="export-controls">
-                            <button class="export-btn" onclick="exportSection('key_points')">📄 Export</button>
-                        </div>
                     </div>
                     <div class="analysis-content">
                         <div class="key-points-list">
@@ -872,9 +872,6 @@
                 <div class="analysis-card">
                     <div class="analysis-header">
                         <h3>⚠️ Potential Issues</h3>
-                        <div class="export-controls">
-                            <button class="export-btn" onclick="exportSection('issues')">📄 Export</button>
-                        </div>
                     </div>
                     <div class="analysis-content">
                         <div class="issues-list">
@@ -894,9 +891,6 @@
                 <div class="analysis-card">
                     <div class="analysis-header">
                         <h3>💡 Recommendations</h3>
-                        <div class="export-controls">
-                            <button class="export-btn" onclick="exportSection('recommendations')">📄 Export</button>
-                        </div>
                     </div>
                     <div class="analysis-content">
                         <div class="recommendations-list">
@@ -916,9 +910,6 @@
                 <div class="analysis-card">
                     <div class="analysis-header">
                         <h3>❓ Clarifying Questions</h3>
-                        <div class="export-controls">
-                            <button class="export-btn" onclick="exportSection('questions')">📄 Export</button>
-                        </div>
                     </div>
                     <div class="analysis-content">
                         <div class="questions-list">
@@ -937,9 +928,6 @@
                 <div class="analysis-card" id="speaker-diarization-section" style="display: none;">
                     <div class="analysis-header">
                         <h3>🎙️ Speaker Analysis</h3>
-                        <div class="export-controls">
-                            <button class="export-btn" onclick="exportSpeakerDiarization()">📄 Export</button>
-                        </div>
                     </div>
                     <div class="analysis-content">
                         <div id="speaker-diarization-content">
@@ -1026,21 +1014,13 @@
                     </div>
                 </div>
 
-                <!-- Export Options -->
+                <!-- Clear Data -->
                 <div class="sidebar-card">
-                    <h4>📤 Export Analysis</h4>
+                    <h4>🗑️ Clear Data</h4>
                     <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        <button onclick="exportFullAnalysis()"
-                            style="padding: 0.75rem; background: var(--perfect-ai); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                            📄 Export Full Analysis
-                        </button>
-                        <button onclick="exportSummary()"
-                            style="padding: 0.75rem; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                            📋 Export Summary
-                        </button>
-                        <button onclick="exportTranscript()"
-                            style="padding: 0.75rem; background: var(--success); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                            🎙️ Export Transcript
+                        <button onclick="clearAllData()"
+                            style="padding: 0.75rem; background: var(--danger); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            🗑️ Clear All Data
                         </button>
                     </div>
                 </div>
@@ -1123,11 +1103,8 @@
                     displaySpeakerDiarization(data.speaker_diarization);
                 }
                 
-                // Auto-refresh to show complete analysis
-                showRefreshNotification();
-                setTimeout(function() {
-                    window.location.reload();
-                }, 2000);
+                // Don't auto-refresh - keep accumulating analysis
+                console.log('✅ New analysis added to page (not refreshing)');
             });
 
             socket.on('speaker_diarization_complete', function(data) {
@@ -1198,8 +1175,13 @@
             const analysisMain = document.querySelector('.analysis-main');
             if (!analysisMain) return;
 
-            // Clear existing content
-            analysisMain.innerHTML = '';
+            // DON'T clear existing content - append new analysis
+            // Add timestamp separator for new analysis
+            const timestamp = new Date().toLocaleTimeString();
+            const separator = document.createElement('div');
+            separator.style.cssText = 'margin: 2rem 0; padding: 1rem; background: var(--perfect-ai); color: white; border-radius: 8px; text-align: center; font-weight: 600;';
+            separator.innerHTML = `📊 New Analysis - ${timestamp}`;
+            analysisMain.appendChild(separator);
 
             // Add Key Points
             if (analysis.key_points && analysis.key_points.length > 0) {
@@ -1663,24 +1645,31 @@
             downloadJSON(exportData, 'perfect_ai_full_analysis');
         }
 
-        function exportSummary() {
-            window.location.href = '/export/summary';
-        }
+        async function clearAllData() {
+            if (!confirm('Are you sure you want to clear all data? This will remove transcripts and analysis.')) {
+                return;
+            }
 
-        function exportTranscript() {
-            window.location.href = '/api/transcript';
-        }
+            try {
+                const response = await fetch('/clear_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-        function downloadJSON(data, filename) {
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${filename}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('✅ All data cleared successfully!');
+                    window.location.reload();
+                } else {
+                    alert('❌ Error clearing data: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Clear data error:', error);
+                alert('❌ Error clearing data: ' + error.message);
+            }
         }
 
         // Initialize on page load

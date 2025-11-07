@@ -1107,26 +1107,6 @@
             </div>
         </div>
 
-        <!-- Perfect AI Session Statistics -->
-        <div class="session-stats">
-            <div class="stat-card">
-                <div class="stat-value">{{ total_sessions }}</div>
-                <div class="stat-label"> AI Sessions</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ total_meetings_analyzed }}</div>
-                <div class="stat-label">Meetings Analyzed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ word_count }}</div>
-                <div class="stat-label">Words Captured</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ '%02d:%02d' | format(duration // 60, duration % 60) }}</div>
-                <div class="stat-label">Duration</div>
-            </div>
-        </div>
-
         <!-- Perfect AI Metrics -->
         {% if is_recording %}
         <div class="control-section">
@@ -1151,29 +1131,6 @@
             </div>
         </div>
         {% endif %}
-
-        <!-- Saved Recordings Management -->
-        <div class="control-section">
-            <h3>📁 Saved Recordings</h3>
-            <div class="recordings-container">
-                <div class="recordings-header">
-                    <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                        All recording sessions are automatically saved as WAV files. You can download or delete them
-                        here.
-                    </p>
-                    <button class="control-button" onclick="refreshRecordings()" style="margin-bottom: 1rem;">
-                        🔄 Refresh List
-                    </button>
-                </div>
-                <div id="recordingsList" class="recordings-list">
-                    <div class="loading-recordings">
-                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            📂 Loading recordings...
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Messages -->
         <div id="messages"></div>
@@ -1310,91 +1267,6 @@
                 }
             }
 
-            /* Recordings Management Styles */
-            .recordings-container {
-                background: var(--bg-secondary);
-                border-radius: 12px;
-                padding: 1.5rem;
-            }
-
-            .recordings-list {
-                max-height: 400px;
-                overflow-y: auto;
-                border: 1px solid var(--border);
-                border-radius: 8px;
-                background: white;
-            }
-
-            .recording-item {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 1rem;
-                border-bottom: 1px solid var(--border-light);
-                transition: background-color 0.2s;
-            }
-
-            .recording-item:hover {
-                background: var(--bg-tertiary);
-            }
-
-            .recording-item:last-child {
-                border-bottom: none;
-            }
-
-            .recording-info {
-                flex: 1;
-            }
-
-            .recording-name {
-                font-weight: 600;
-                color: var(--text-primary);
-                margin-bottom: 0.25rem;
-            }
-
-            .recording-details {
-                font-size: 0.85rem;
-                color: var(--text-secondary);
-            }
-
-            .recording-actions {
-                display: flex;
-                gap: 0.5rem;
-            }
-
-            .recording-btn {
-                padding: 0.5rem 1rem;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 0.85rem;
-                font-weight: 600;
-                transition: all 0.2s;
-            }
-
-            .recording-btn.download {
-                background: var(--success);
-                color: white;
-            }
-
-            .recording-btn.download:hover {
-                background: #059669;
-            }
-
-            .recording-btn.delete {
-                background: var(--danger);
-                color: white;
-            }
-
-            .recording-btn.delete:hover {
-                background: #B91C1C;
-            }
-
-            .no-recordings {
-                text-align: center;
-                padding: 3rem 1rem;
-                color: var(--text-secondary);
-            }
         </style>
         {% endif %}
     </div>

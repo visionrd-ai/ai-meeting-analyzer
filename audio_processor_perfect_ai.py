@@ -1592,9 +1592,9 @@ class PerfectAIAudioProcessor:
                                 filename=os.path.basename(self.recording_filename),
                                 original_filename=os.path.basename(self.recording_filename),
                                 file_path=self.recording_filename,
-                                file_size=file_size,
+                                file_size_bytes=file_size,
                                 duration_seconds=int(duration),
-                                audio_format='wav',
+                                format='wav',
                                 sample_rate=RATE,
                                 channels=CHANNELS
                             )
